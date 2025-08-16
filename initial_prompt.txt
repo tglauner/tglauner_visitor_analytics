@@ -1,0 +1,73 @@
+I'd like to have a dashboard that shows me my traffic on tglauner.com and pages below. whats best architecture for this. keep in mind different areas of web site are in different repos but i'd like a consolidated view with details who logged in from where, what they did, etc. should be non cryptice info but dahsboard with details.
+
+The web site had the following areas:
+www.tglauner.com - landing page
+https://tglauner.com/ - landing page  - Critical landing page for all courses
+https://tglauner.com/mastering_interest_rate_derivatives/  - Critical landing page for Mastering Interest Rate derivatives course with links to Udemy
+https://tglauner.com/mastering_mbs_and_abs/  - Critical landing page for MBS&ABS course with links to Udemy
+https://tglauner.com/frtb_fundamentals/index.html  - Critical landing page for FRTB course with links to Udemy
+https://tglauner.com/dashboard/  - My personal dashboard. Also, not important
+https://tglauner.com/multi_model_talkshow/dist/  - Not important to track as it's just to play with and will be removed
+https://tglauner.com/visitor_analytics/  - Used for my personal statistics of user interactions of tglauner.com
+
+To understand the web site architecture of www.tglauner.com I am includin ghte apache confguration file:
+<VirtualHost *:443>
+        # This file is stored in /etc/apache2/sites-available
+        ServerAdmin webmaster@localhost
+
+        DocumentRoot /var/www/html
+        <Directory /var/www/html>
+                AllowOverride All
+                Require all granted
+                Options -Indexes
+        </Directory>
+
+        <DirectoryMatch "^/.*/\.git/">
+                Require all denied
+        </DirectoryMatch>
+
+        <FilesMatch "^\.git">
+                Require all denied
+        </FilesMatch>
+
+        <FilesMatch "\.(sh|py|pl|bak|old|log|ini|conf|csv)$">
+                Require all denied
+        </FilesMatch>
+
+        Alias /dashboard/ /var/www/html/dashboard/dist/
+
+        <Directory /var/www/html/dashboard/dist>
+            Options -Indexes +FollowSymLinks -MultiViews
+            AllowOverride All
+            Require all granted
+
+            # Always prefer index.html here         
+            DirectoryIndex index.html
+
+            # For Single Page Applications (SPAs) like React, rewrite all requests
+            # within /dashboard/ to index.html if the file doesn't exist.
+            RewriteEngine On
+            RewriteCond %{REQUEST_FILENAME} !-f
+            RewriteCond %{REQUEST_FILENAME} !-d
+            RewriteRule . index.html [L]
+        </Directory>
+
+        ErrorLog ${APACHE_LOG_DIR}/error.log
+        CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+        SSLEngine on
+
+        <FilesMatch "\.(?:cgi|shtml|phtml|php)$">
+                SSLOptions +StdEnvVars
+        </FilesMatch>
+        <Directory /usr/lib/cgi-bin>
+                SSLOptions +StdEnvVars
+        </Directory>
+
+        ServerName      tglauner.com
+        Include   /etc/letsencrypt/options-ssl-apache.conf
+        
+        ServerAlias www.tglauner.com
+        SSLCertificateFile /etc/letsencrypt/live/tglauner.com/fullchain.pem
+        SSLCertificateKeyFile /etc/letsencrypt/live/tglauner.com/privkey.pem
+</VirtualHost>
