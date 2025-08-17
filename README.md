@@ -137,8 +137,19 @@ At the **bottom of `<body>`** in each course landing page:
 <script src="/js/tracking.js" defer></script>
 ```
 
-Make sure `/js/tracking.js` is deployed into `/var/www/html/js/tracking.js`.
+Make sure `/js/tracking.js` is deployed into `/var/www/html/js/tracking.js` or apache below is added as alias.
+We used alias to keep everything in visitor_analytics contained.
+
 This script automatically records page views and outbound link clicks.
+Apache also needs to be updated
+```
+        # Tracking script (new path)
+        Alias /js/ "/var/www/html/visitor_analytics/tracking/"
+        <Directory "/var/www/html/visitor_analytics/tracking">
+                Options -Indexes
+                Require all granted
+        </Directory>
+```
 
 ### 3.2. Coupon tracking
 
