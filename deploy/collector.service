@@ -1,0 +1,16 @@
+[Unit]
+Description=Visitor Analytics Collector (FastAPI)
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/visitor-analytics-platform/collector
+Environment=DATABASE_URL=sqlite:////var/lib/visitor_log/analytics.sqlite3
+Environment=MAXMIND_DB=/opt/visitor_log/geo/GeoLite2-City.mmdb
+Environment=ALLOWED_ORIGINS=tglauner.com,localhost,127.0.0.1
+ExecStart=/usr/bin/env bash -lc 'source .venv/bin/activate && uvicorn app:app --host 127.0.0.1 --port 9000 --workers 2'
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
