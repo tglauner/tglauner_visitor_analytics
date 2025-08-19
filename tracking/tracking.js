@@ -40,6 +40,7 @@
     return x;
   }
   let last = Date.now();
+  let pageStart = Date.now();
   function sid() {
     let s = rc("tg_sid");
     const n = Date.now();
@@ -111,6 +112,7 @@
   setInterval(fl, C.flushMs);
   addEventListener("beforeunload", fl);
   function pg() {
+    pageStart = Date.now();
     en({
       event_name: "page_view",
       path: location.pathname,
@@ -169,5 +171,15 @@
     },
     true,
   );
+  addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      en({
+        event_name: "page_unload",
+        path: location.pathname,
+        time_on_page_ms: Date.now() - pageStart,
+      });
+      fl();
+    }
+  });
   window.tgAnalytics = { page: pg, setSampleRate: (p) => (C.sampleRate = p) };
 })();
