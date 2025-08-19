@@ -107,6 +107,42 @@
       .join("");
   }
 
+  async function loadPageDetails(path) {
+    const q = qs();
+    const url = `/api/metrics/page_details?path=${encodeURIComponent(path)}${q ? "&" + q.slice(1) : ""}`;
+    const r = await fetch(API_BASE + url);
+    if (!r.ok) return;
+    const d = await r.json();
+    const rows = d.rows || [];
+    document.querySelector("#detailPath").textContent = path;
+    document.querySelector("#detailTable tbody").innerHTML = rows
+      .map(
+        (r) => `
+      <tr>
+        <td>${r.ts}</td>
+        <td>${r.event_name}</td>
+        <td>${r.referrer || ""}</td>
+      </tr>`
+      )
+      .join("");
+    document.getElementById("detailModal").classList.remove("hidden");
+  }
+
+  document.getElementById("detailClose").addEventListener("click", () => {
+    document.getElementById("detailModal").classList.add("hidden");
+  });
+
+  document.getElementById("detailModal").addEventListener("click", (e) => {
+    if (e.target.id === "detailModal") document.getElementById("detailModal").classList.add("hidden");
+  });
+
+  document.querySelector("#pages tbody").addEventListener("dblclick", (e) => {
+    const tr = e.target.closest("tr");
+    if (!tr) return;
+    const path = tr.children[0].textContent;
+    loadPageDetails(path);
+  });
+
   async function refreshAll() {
     await Promise.all([loadSummary(), loadPages(), loadCoupons(), loadLocations()]);
   }

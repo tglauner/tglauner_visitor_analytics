@@ -165,6 +165,13 @@ def metrics_top_pages(start: Optional[str] = None, end: Optional[str] = None, li
         rows.append({'path':p,'views':v,'udemy_clicks':cks,'orders':o['orders'],'net':round(o['net'],2),'cr_pct':round(cr,2)})
     return {'range':{'start':s,'end':e},'rows':rows}
 
+@app.get('/api/metrics/page_details')
+def metrics_page_details(path: str, start: Optional[str] = None, end: Optional[str] = None):
+    s,e = parse_range(start,end); cur = conn.cursor()
+    cur.execute("SELECT ts, uid, session_id, event_name, referrer FROM events_raw WHERE path = ? AND ts BETWEEN ? AND ? ORDER BY ts DESC", (path,s,e))
+    rows=[dict(r) for r in cur.fetchall()]
+    return {'range':{'start':s,'end':e},'path':path,'rows':rows}
+
 @app.get('/api/metrics/locations')
 def metrics_locations(start: Optional[str] = None, end: Optional[str] = None):
     s,e = parse_range(start,end); cur = conn.cursor()
