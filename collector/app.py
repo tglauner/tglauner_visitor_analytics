@@ -46,6 +46,7 @@ class Event(BaseModel):
     href: Optional[str] = None; button_id: Optional[str] = None; course_slug: Optional[str] = None; coupon: Optional[str] = None
     utm_source: Optional[str] = None; utm_medium: Optional[str] = None; utm_campaign: Optional[str] = None
     viewport: Optional[Dict[str, Any]] = None; percent: Optional[int] = None
+    time_on_page_ms: Optional[int] = None
 class Batch(BaseModel):
     events: List[Event] = Field(default_factory=list)
 
@@ -94,11 +95,34 @@ async def collect(req: Request, batch: Batch):
     device, browser, osfam = ua_to_device(ua)
     rows = []
     for e in batch.events:
-        rows.append((e.uid, e.session_id, e.ts, e.event_name, e.path, e.title, e.referrer,
-                     e.course_slug, e.coupon, e.button_id, e.utm_source, e.utm_medium, e.utm_campaign,
-                     ip, country, region, device, browser, osfam, json.dumps({'href': e.href, 'viewport': e.viewport, 'percent': e.percent})))
+        rows.append((
+            e.uid,
+            e.session_id,
+            e.ts,
+            e.event_name,
+            e.path,
+            e.title,
+            e.referrer,
+            e.course_slug,
+            e.coupon,
+            e.button_id,
+            e.utm_source,
+            e.utm_medium,
+            e.utm_campaign,
+            ip,
+            country,
+            region,
+            device,
+            browser,
+            osfam,
+            json.dumps({'href': e.href, 'viewport': e.viewport, 'percent': e.percent}),
+            e.time_on_page_ms,
+        ))
     with dblock:
-        conn.executemany('INSERT INTO events_raw (uid, session_id, ts, event_name, path, title, referrer, course_slug, coupon, button_id, utm_source, utm_medium, utm_campaign, ip, geo_country, geo_region, device, browser, os, props_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', rows)
+        conn.executemany(
+            'INSERT INTO events_raw (uid, session_id, ts, event_name, path, title, referrer, course_slug, coupon, button_id, utm_source, utm_medium, utm_campaign, ip, geo_country, geo_region, device, browser, os, props_json, time_on_page_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            rows,
+        )
     return JSONResponse({'ok': True, 'n': len(rows)})
 
 @app.get('/healthz')
@@ -168,9 +192,18 @@ def metrics_top_pages(start: Optional[str] = None, end: Optional[str] = None, li
 @app.get('/api/metrics/page_details')
 def metrics_page_details(path: str, start: Optional[str] = None, end: Optional[str] = None):
     s,e = parse_range(start,end); cur = conn.cursor()
-    cur.execute("SELECT ts, uid, session_id, event_name, referrer FROM events_raw WHERE path = ? AND ts BETWEEN ? AND ? ORDER BY ts DESC", (path,s,e))
-    rows=[dict(r) for r in cur.fetchall()]
-    return {'range':{'start':s,'end':e},'path':path,'rows':rows}
+    cur.execute(
+        "SELECT uid, ip, ts, event_name, path, referrer, button_id, geo_country, device, time_on_page_ms, props_json FROM events_raw WHERE path = ? AND ts BETWEEN ? AND ? ORDER BY ts DESC",
+        (path, s, e),
+    )
+    rows = []
+    for r in cur.fetchall():
+        d = dict(r)
+        props = json.loads(d.get('props_json') or '{}')
+        d['percent'] = props.get('percent')
+        d.pop('props_json', None)
+        rows.append(d)
+    return {'range': {'start': s, 'end': e}, 'path': path, 'rows': rows}
 
 @app.get('/api/metrics/locations')
 def metrics_locations(start: Optional[str] = None, end: Optional[str] = None):
