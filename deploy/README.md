@@ -1,12 +1,23 @@
-1) Copy collector.service → /etc/systemd/system/ and enable/start it.
+1) Install the systemd unit and start the collector:
+
+```
+sudo cp deploy/collector.service /etc/systemd/system/visitor-collector.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now visitor-collector
+```
+
 2) Run database migrations:
 
 ```
-sqlite3 /var/lib/visitor_log/analytics.sqlite3 < collector/migrations/001_init.sql
-sqlite3 /var/lib/visitor_log/analytics.sqlite3 < collector/migrations/002_add_time_on_page.sql
+sudo sqlite3 /var/lib/visitor_log/analytics.sqlite3 < collector/migrations/001_init.sql
+sudo sqlite3 /var/lib/visitor_log/analytics.sqlite3 < collector/migrations/002_add_time_on_page.sql
 ```
 
-3) Append apache_snippet.conf to your SSL vhost.
+3) Append apache_snippet.conf to your SSL vhost:
+
+```
+sudo tee -a /etc/apache2/sites-available/YOUR_VHOST.conf < deploy/apache_snippet.conf
+```
 
 ### Restarts
 
