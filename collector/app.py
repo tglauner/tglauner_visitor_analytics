@@ -120,7 +120,7 @@ async def collect(req: Request, batch: Batch):
         ))
     with dblock:
         conn.executemany(
-            'INSERT INTO events_raw (uid, session_id, ts, event_name, path, title, referrer, course_slug, coupon, button_id, utm_source, utm_medium, utm_campaign, ip, geo_country, geo_region, device, browser, os, props_json, time_on_page_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO events_raw (uid, session_id, ts, event_name, path, title, referrer, course_slug, coupon, button_id, utm_source, utm_medium, utm_campaign, ip, geo_country, geo_region, device, browser, os, props_json, time_on_page_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             rows,
         )
     return JSONResponse({'ok': True, 'n': len(rows)})
