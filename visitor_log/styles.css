@@ -111,6 +111,18 @@ h2 {
   color: #cfe1f7;
 }
 
+h3 {
+  font-size: 14px;
+  color: #d6e4f8;
+  margin: 0 0 8px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 4px 0 12px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -126,6 +138,12 @@ td {
 
 tbody tr:hover {
   background: #121820;
+}
+
+td.empty {
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
 }
 
 .two-col {
@@ -145,6 +163,21 @@ footer {
   border-top: 1px solid #223;
   color: var(--muted);
   font-size: 12px;
+}
+
+#xva .two-col {
+  gap: 16px;
+}
+
+#xva .two-col > div {
+  background: var(--card);
+  border: 1px solid #223;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+#xva .two-col table {
+  margin-top: 8px;
 }
 
 .modal {

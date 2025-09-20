@@ -19,12 +19,48 @@ DB_URL = os.getenv('DATABASE_URL','sqlite:////var/lib/visitor_log/analytics.sqli
 DB_PATH = DB_URL.replace('sqlite:////','/') if DB_URL.startswith('sqlite:////') else DB_URL.replace('sqlite:///','/')
 ALLOWED_ORIGINS = [h.strip().lower() for h in os.getenv('ALLOWED_ORIGINS','tglauner.com,localhost,127.0.0.1').split(',')]
 MAXMIND_DB = os.getenv('MAXMIND_DB','/opt/visitor_log/geo/GeoLite2-City.mmdb')
+def normalize_domain(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        text = value.strip()
+        if not text:
+            return None
+        parsed = urlparse(text if '://' in text else f'//{text}', allow_fragments=False)
+        host = parsed.hostname or parsed.path or ''
+        if '/' in host:
+            host = host.split('/')[0]
+        host = host.strip().lower()
+        return host or None
+    except Exception:
+        return None
+
+
+def props_host_from_json(props_json: Optional[str]) -> str:
+    if not props_json:
+        return ''
+    try:
+        payload = json.loads(props_json)
+    except Exception:
+        return ''
+    domain = payload.get('target_domain')
+    if domain:
+        normalized = normalize_domain(domain)
+        if normalized:
+            return normalized
+    href = payload.get('href')
+    normalized = normalize_domain(href)
+    return normalized or ''
+
+
+XVA_DOMAIN = normalize_domain(os.getenv('XVA_TARGET_DOMAIN', 'course-xva-essentials.tglauner.com'))
 if GeoReader and os.path.exists(MAXMIND_DB):
     try: GEO_READER = GeoReader(MAXMIND_DB)
     except Exception: GEO_READER = None
 
 conn = sqlite3.connect(DB_PATH, check_same_thread=False, isolation_level=None)
 conn.row_factory = sqlite3.Row
+conn.create_function('props_host', 1, props_host_from_json)
 dblock = threading.Lock()
 app = FastAPI(title='Visitor Analytics Collector', version='1.0.0')
 
@@ -43,7 +79,7 @@ app.add_middleware(
 class Event(BaseModel):
     ts: str; uid: str; session_id: str; event_name: str
     path: Optional[str] = None; title: Optional[str] = None; referrer: Optional[str] = None
-    href: Optional[str] = None; button_id: Optional[str] = None; course_slug: Optional[str] = None; coupon: Optional[str] = None
+    href: Optional[str] = None; target_domain: Optional[str] = None; button_id: Optional[str] = None; course_slug: Optional[str] = None; coupon: Optional[str] = None
     utm_source: Optional[str] = None; utm_medium: Optional[str] = None; utm_campaign: Optional[str] = None
     viewport: Optional[Dict[str, Any]] = None; percent: Optional[int] = None
     time_on_page_ms: Optional[int] = None
@@ -115,7 +151,7 @@ async def collect(req: Request, batch: Batch):
             device,
             browser,
             osfam,
-            json.dumps({'href': e.href, 'viewport': e.viewport, 'percent': e.percent}),
+            json.dumps({'href': e.href, 'viewport': e.viewport, 'percent': e.percent, 'target_domain': e.target_domain}),
             e.time_on_page_ms,
         ))
     with dblock:
@@ -136,9 +172,23 @@ def metrics_summary(start: Optional[str] = None, end: Optional[str] = None):
     cur.execute('SELECT COUNT(DISTINCT session_id) AS s FROM events_raw WHERE ts BETWEEN ? AND ?', (s,e)); sessions = cur.fetchone()['s'] or 0
     cur.execute("SELECT COUNT(*) AS pv FROM events_raw WHERE event_name='page_view' AND ts BETWEEN ? AND ?", (s,e)); page_views = cur.fetchone()['pv'] or 0
     cur.execute("SELECT COUNT(*) AS oc FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?", (s,e)); out_clicks = cur.fetchone()['oc'] or 0
+    xva_clicks = None
+    if XVA_DOMAIN:
+        cur.execute(
+            """
+            SELECT COUNT(*) AS xc
+            FROM events_raw
+            WHERE event_name='outbound_click'
+              AND ts BETWEEN ? AND ?
+              AND props_host(props_json) = ?
+            """,
+            (s, e, XVA_DOMAIN),
+        )
+        row = cur.fetchone()
+        xva_clicks = int(row['xc'] or 0) if row else 0
     cur.execute('SELECT COUNT(*) AS orders, COALESCE(SUM(net),0) AS net FROM udemy_orders WHERE order_ts BETWEEN ? AND ?', (s,e)); row = cur.fetchone(); orders=row['orders'] or 0; net=row['net'] or 0.0
     cr = (orders/out_clicks*100.0) if out_clicks else 0.0
-    return {'range':{'start':s,'end':e},'visitors':visitors,'sessions':sessions,'page_views':page_views,'outbound_clicks':out_clicks,'orders':orders,'net_revenue':round(net,2),'click_to_order_cr_pct':round(cr,2)}
+    return {'range':{'start':s,'end':e},'visitors':visitors,'sessions':sessions,'page_views':page_views,'outbound_clicks':out_clicks,'xva_clicks':xva_clicks,'xva_domain':XVA_DOMAIN,'orders':orders,'net_revenue':round(net,2),'click_to_order_cr_pct':round(cr,2)}
 
 @app.get('/api/metrics/coupons')
 def metrics_coupons(start: Optional[str] = None, end: Optional[str] = None):
@@ -201,6 +251,8 @@ def metrics_page_details(path: str, start: Optional[str] = None, end: Optional[s
         d = dict(r)
         props = json.loads(d.get('props_json') or '{}')
         d['percent'] = props.get('percent')
+        d['href'] = props.get('href')
+        d['target_domain'] = props.get('target_domain')
         d.pop('props_json', None)
         rows.append(d)
     return {'range': {'start': s, 'end': e}, 'path': path, 'rows': rows}
@@ -211,6 +263,78 @@ def metrics_locations(start: Optional[str] = None, end: Optional[str] = None):
     cur.execute("SELECT COALESCE(geo_country,'?') AS country, COALESCE(geo_region,'?') AS region, COUNT(DISTINCT uid) AS visitors, COUNT(DISTINCT session_id) AS sessions, SUM(CASE WHEN event_name='page_view' THEN 1 ELSE 0 END) AS views FROM events_raw WHERE ts BETWEEN ? AND ? GROUP BY country, region ORDER BY visitors DESC", (s,e))
     rows=[dict(r) for r in cur.fetchall()]
     return {'range':{'start':s,'end':e},'rows':rows}
+
+def _domain_click_metrics(domain: str, start: str, end: str):
+    cur = conn.cursor()
+    params = (start, end, domain)
+    cur.execute(
+        """
+        SELECT COUNT(*) AS clicks, COUNT(DISTINCT uid) AS visitors
+        FROM events_raw
+        WHERE event_name='outbound_click'
+          AND ts BETWEEN ? AND ?
+          AND props_host(props_json) = ?
+        """,
+        params,
+    )
+    totals = dict(cur.fetchone() or {})
+    cur.execute(
+        """
+        SELECT COALESCE(path,'/') AS path,
+               COUNT(*) AS clicks,
+               COUNT(DISTINCT uid) AS visitors
+        FROM events_raw
+        WHERE event_name='outbound_click'
+          AND ts BETWEEN ? AND ?
+          AND props_host(props_json) = ?
+        GROUP BY path
+        ORDER BY clicks DESC
+        """,
+        params,
+    )
+    by_page = [dict(r) for r in cur.fetchall()]
+    cur.execute(
+        """
+        SELECT COALESCE(geo_country,'?') AS country,
+               COALESCE(geo_region,'?') AS region,
+               COUNT(*) AS clicks
+        FROM events_raw
+        WHERE event_name='outbound_click'
+          AND ts BETWEEN ? AND ?
+          AND props_host(props_json) = ?
+        GROUP BY geo_country, geo_region
+        ORDER BY clicks DESC
+        """,
+        params,
+    )
+    by_location = [dict(r) for r in cur.fetchall()]
+    return {
+        'total_clicks': int(totals.get('clicks', 0) or 0),
+        'unique_visitors': int(totals.get('visitors', 0) or 0),
+        'by_page': by_page,
+        'by_location': by_location,
+    }
+
+
+@app.get('/api/metrics/xva_clicks')
+def metrics_xva_clicks(start: Optional[str] = None, end: Optional[str] = None, domain: Optional[str] = None):
+    s, e = parse_range(start, end)
+    target = normalize_domain(domain) if domain is not None else XVA_DOMAIN
+    if not target:
+        return {
+            'range': {'start': s, 'end': e},
+            'domain': None,
+            'total_clicks': 0,
+            'unique_visitors': 0,
+            'by_page': [],
+            'by_location': [],
+        }
+    metrics = _domain_click_metrics(target, s, e)
+    return {
+        'range': {'start': s, 'end': e},
+        'domain': target,
+        **metrics,
+    }
 
 from importer.udemy_csv_importer import parse_udemy_csv
 @app.post('/api/import/udemy_csv')
