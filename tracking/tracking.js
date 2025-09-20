@@ -64,21 +64,51 @@
       return {};
     }
   }
-  function parseUdemy(h) {
+  function normalizeDomain(value) {
+    if (!value) return null;
+    try {
+      const text = value.toString().trim();
+      if (!text) return null;
+      const url = new URL(text.includes("://") ? text : `https://${text}`);
+      return (url.hostname || "").replace(/^www\./, "").toLowerCase();
+    } catch (e) {
+      return value.toString().trim().replace(/^www\./, "").toLowerCase();
+    }
+  }
+
+  let rawXva;
+  if (typeof window.__tgXvaDomain__ !== "undefined") {
+    rawXva = window.__tgXvaDomain__;
+  } else if (
+    window.tgAnalyticsConfig &&
+    Object.prototype.hasOwnProperty.call(window.tgAnalyticsConfig, "xvaDomain")
+  ) {
+    rawXva = window.tgAnalyticsConfig.xvaDomain;
+  }
+  const DEFAULT_XVA = "course-xva-essentials.tglauner.com";
+  const XVA_DOMAIN = normalizeDomain(
+    rawXva === undefined ? DEFAULT_XVA : rawXva,
+  );
+
+  function parseTrackedLink(h) {
     try {
       const uo = new URL(h, location.origin);
-      const host = (uo.hostname || "").replace(/^www\./, "");
-      if (!/udemy\.com$/.test(host)) return null;
-      const m = uo.pathname.match(/\/course\/([^\/]+)\//);
-      const cs = m ? m[1] : null;
-      const cpn =
-        uo.searchParams.get("couponCode") ||
-        uo.searchParams.get("coupon") ||
-        null;
-      return { course_slug: cs, coupon: cpn };
-    } catch (e) {
-      return null;
-    }
+      const host = (uo.hostname || "").toLowerCase();
+      const normalized = host.replace(/^www\./, "");
+      if (/udemy\.com$/.test(normalized)) {
+        const m = uo.pathname.match(/\/course\/([^\/]+)\//);
+        const cs = m ? m[1] : null;
+        const cpn =
+          uo.searchParams.get("couponCode") ||
+          uo.searchParams.get("coupon") ||
+          null;
+        return { course_slug: cs, coupon: cpn, target_domain: normalized };
+      }
+      if (XVA_DOMAIN && normalized === XVA_DOMAIN) {
+        return { target_domain: normalized };
+      }
+    } catch (e) {}
+    return null;
   }
   const Q = [];
   function en(ev) {
@@ -153,7 +183,7 @@
     (e) => {
       const a = e.target.closest && e.target.closest("a[href]");
       if (!a) return;
-      const out = parseUdemy(a.href);
+      const out = parseTrackedLink(a.href);
       if (!out) return;
       const id =
         a.getAttribute("data-button-id") ||
@@ -163,6 +193,7 @@
         event_name: "outbound_click",
         path: location.pathname,
         href: a.href,
+        target_domain: out.target_domain || null,
         button_id: id,
         course_slug: out.course_slug,
         coupon: out.coupon,

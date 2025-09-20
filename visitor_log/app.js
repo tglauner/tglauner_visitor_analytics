@@ -35,6 +35,10 @@
     return r.json();
   }
 
+  function emptyRow(colspan, message = "No data yet") {
+    return `<tr><td colspan="${colspan}" class="empty">${message}</td></tr>`;
+  }
+
   async function loadSummary() {
     const s = await fetchJSON("/api/metrics/summary");
     const tiles = [
@@ -42,10 +46,15 @@
       ["Sessions", s.sessions],
       ["Page Views", s.page_views],
       ["Udemy Clicks", s.outbound_clicks],
+    ];
+    if (s.xva_domain) {
+      tiles.push(["XVA Clicks", s.xva_clicks ?? 0]);
+    }
+    tiles.push(
       ["Orders", s.orders],
       ["Net Revenue", `$${(+s.net_revenue).toFixed(2)}`],
       ["CR %", `${(+s.click_to_order_cr_pct).toFixed(2)}%`],
-    ];
+    );
     $("#tiles").innerHTML = tiles
       .map(
         ([l, v]) =>
@@ -107,6 +116,67 @@
       .join("");
   }
 
+  async function loadXvaClicks() {
+    const section = document.getElementById("xva");
+    if (!section) return;
+    let d;
+    try {
+      d = await fetchJSON("/api/metrics/xva_clicks");
+    } catch (err) {
+      section.style.display = "none";
+      return;
+    }
+    const domain = d.domain || null;
+    const summary = document.getElementById("xvaSummary");
+    if (!domain) {
+      section.style.display = "none";
+      if (summary) summary.textContent = "";
+      return;
+    }
+    section.style.display = "";
+    const total = d.total_clicks || 0;
+    const visitors = d.unique_visitors || 0;
+    if (summary) {
+      summary.textContent = total
+        ? `${total} clicks to ${domain} from ${visitors} unique visitor${
+            visitors === 1 ? "" : "s"
+          }`
+        : `No clicks to ${domain} in this range yet.`;
+    }
+    const pageRows = d.by_page || [];
+    const pageBody = document.querySelector("#xvaByPage tbody");
+    if (pageBody) {
+      pageBody.innerHTML = pageRows.length
+        ? pageRows
+            .map(
+              (r) => `
+      <tr>
+        <td>${r.path || "/"}</td>
+        <td>${r.clicks}</td>
+        <td>${r.visitors}</td>
+      </tr>`
+            )
+            .join("")
+        : emptyRow(3, "No tracked clicks yet");
+    }
+    const locRows = d.by_location || [];
+    const locBody = document.querySelector("#xvaByLocation tbody");
+    if (locBody) {
+      locBody.innerHTML = locRows.length
+        ? locRows
+            .map(
+              (r) => `
+      <tr>
+        <td>${r.country || "?"}</td>
+        <td>${r.region || "?"}</td>
+        <td>${r.clicks}</td>
+      </tr>`
+            )
+            .join("")
+        : emptyRow(3, "No location data yet");
+    }
+  }
+
   async function loadPageDetails(path) {
     const q = qs();
     const url = `/api/metrics/page_details?path=${encodeURIComponent(path)}${q ? "&" + q.slice(1) : ""}`;
@@ -126,6 +196,12 @@
         <td>${r.path || ""}</td>
         <td>${r.referrer || ""}</td>
         <td>${r.button_id || ""}</td>
+        <td>${r.target_domain || ""}</td>
+        <td>${
+          r.href
+            ? `<a href="${r.href}" target="_blank" rel="noopener">${r.href}</a>`
+            : ""
+        }</td>
         <td>${r.percent ?? ""}</td>
         <td>${r.geo_country || ""}</td>
         <td>${r.device || ""}</td>
@@ -152,7 +228,13 @@
   });
 
   async function refreshAll() {
-    await Promise.all([loadSummary(), loadPages(), loadCoupons(), loadLocations()]);
+    await Promise.all([
+      loadSummary(),
+      loadPages(),
+      loadCoupons(),
+      loadLocations(),
+      loadXvaClicks(),
+    ]);
   }
 
   document.getElementById("refresh").addEventListener("click", refreshAll);
