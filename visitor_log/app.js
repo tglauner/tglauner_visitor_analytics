@@ -193,6 +193,7 @@
         <td>${r.ip || ""}</td>
         <td>${r.ts}</td>
         <td>${r.event_name}</td>
+        <td>${r.app_id || ""}</td>
         <td>${r.path || ""}</td>
         <td>${r.referrer || ""}</td>
         <td>${r.button_id || ""}</td>

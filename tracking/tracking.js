@@ -12,6 +12,7 @@
     flushMs: 5000,
     sessionTimeout: 1800000,
     sampleRate: 1.0,
+    appId: null,
   };
   function u() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
@@ -76,6 +77,16 @@
     }
   }
 
+  function cleanAppId(value) {
+    if (value === null || typeof value === "undefined") return null;
+    try {
+      const text = String(value).trim();
+      return text ? text : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
   let rawXva;
   if (typeof window.__tgXvaDomain__ !== "undefined") {
     rawXva = window.__tgXvaDomain__;
@@ -89,6 +100,17 @@
   const XVA_DOMAIN = normalizeDomain(
     rawXva === undefined ? DEFAULT_XVA : rawXva,
   );
+
+  let rawAppId = null;
+  if (typeof window.__tgAnalyticsAppId__ !== "undefined") {
+    rawAppId = window.__tgAnalyticsAppId__;
+  } else if (
+    window.tgAnalyticsConfig &&
+    Object.prototype.hasOwnProperty.call(window.tgAnalyticsConfig, "appId")
+  ) {
+    rawAppId = window.tgAnalyticsConfig.appId;
+  }
+  C.appId = cleanAppId(rawAppId);
 
   function parseTrackedLink(h) {
     try {
@@ -117,6 +139,9 @@
     ev.uid = uid();
     ev.session_id = sid();
     ev.viewport = { w: innerWidth, h: innerHeight, dpr: devicePixelRatio || 1 };
+    if (C.appId) {
+      ev.app_id = C.appId;
+    }
     Q.push(ev);
     if (Q.length >= C.batchSize) fl();
   }
@@ -212,5 +237,11 @@
       fl();
     }
   });
-  window.tgAnalytics = { page: pg, setSampleRate: (p) => (C.sampleRate = p) };
+  window.tgAnalytics = {
+    page: pg,
+    setSampleRate: (p) => (C.sampleRate = p),
+    setAppId: (id) => {
+      C.appId = cleanAppId(id);
+    },
+  };
 })();
