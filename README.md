@@ -176,6 +176,23 @@ The collector extracts coupon codes from `href` automatically.
 * `/mastering_interest_rate_derivatives/index.html`
 * `/mastering_mbs_and_abs/index.html`
 
+### 3.4. React/Vite apps (Talkshow & AI Value Advisor)
+
+Both `/multi_model_talkshow/` and `/ai_value_advisor/` ship as React single-page apps. To tag
+events from these apps with a stable identifier, include the helper near the end of their
+`index.html` files:
+
+```html
+<!-- multi_model_talkshow/index.html -->
+<script src="/visitor_analytics/tracking/apps/multi_model_talkshow.js" defer></script>
+
+<!-- ai_value_advisor/index.html -->
+<script src="/visitor_analytics/tracking/apps/ai_value_advisor.js" defer></script>
+```
+
+The helper sets `window.tgAnalyticsConfig.appId` before loading the shared tracker, so the
+dashboard's detail view can display which app generated each event.
+
 ---
 
 ## 4. Maintenance

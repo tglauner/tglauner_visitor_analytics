@@ -82,7 +82,7 @@ class Event(BaseModel):
     href: Optional[str] = None; target_domain: Optional[str] = None; button_id: Optional[str] = None; course_slug: Optional[str] = None; coupon: Optional[str] = None
     utm_source: Optional[str] = None; utm_medium: Optional[str] = None; utm_campaign: Optional[str] = None
     viewport: Optional[Dict[str, Any]] = None; percent: Optional[int] = None
-    time_on_page_ms: Optional[int] = None
+    time_on_page_ms: Optional[int] = None; app_id: Optional[str] = None
 class Batch(BaseModel):
     events: List[Event] = Field(default_factory=list)
 
@@ -151,7 +151,13 @@ async def collect(req: Request, batch: Batch):
             device,
             browser,
             osfam,
-            json.dumps({'href': e.href, 'viewport': e.viewport, 'percent': e.percent, 'target_domain': e.target_domain}),
+            json.dumps({
+                'href': e.href,
+                'viewport': e.viewport,
+                'percent': e.percent,
+                'target_domain': e.target_domain,
+                'app_id': e.app_id,
+            }),
             e.time_on_page_ms,
         ))
     with dblock:
@@ -253,6 +259,7 @@ def metrics_page_details(path: str, start: Optional[str] = None, end: Optional[s
         d['percent'] = props.get('percent')
         d['href'] = props.get('href')
         d['target_domain'] = props.get('target_domain')
+        d['app_id'] = props.get('app_id')
         d.pop('props_json', None)
         rows.append(d)
     return {'range': {'start': s, 'end': e}, 'path': path, 'rows': rows}
