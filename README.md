@@ -17,10 +17,10 @@ It captures outbound clicks (e.g. Udemy coupons), page views, and user interacti
 
 * **`collector/`**: FastAPI backend that receives events (`/collect`), stores them in SQLite, and serves metrics (`/api/metrics/...`).
 * **`visitor_log/`**: Static frontend dashboard (HTML + JS) that visualizes traffic, coupons, locations, and top pages.
-* **Database**: SQLite (no external service required). File lives under `/var/lib/visitor_log/analytics.sqlite3` in production.
+* **Database**: SQLite (no external service required). File lives under `/var/www/html/visitor_analytics/data/analytics.sqlite3` in production.
 * **Web server**: Apache 2.4 on DigitalOcean droplet (already hosting `tglauner.com`). Apache serves:
 
-  * Existing course sites (`/frtb_fundamentals/`, `/mastering_interest_rate_derivatives/`, `/mastering_mbs_and_abs/`)
+  * Existing course sites (`/frtb_fundamentals/`, `/mastering_interest_rate_derivatives/`, `/mastering_mbs_and_abs/`, `course-xva-essentials.tglauner.com`, and others)
   * Visitor dashboard under `/visitor_log/`
   * Reverse proxy from `/api/` → FastAPI collector (port 9000).
 
@@ -30,28 +30,22 @@ It captures outbound clicks (e.g. Udemy coupons), page views, and user interacti
 
 ### 2.1. Install requirements
 
-SSH into the droplet:
+App lives in /var/www/html/visitor_analytics on droplet
+
+### 2.2 Setup and activate python
 
 ```bash
-ssh root@45.55.196.120
-apt update && apt install -y python3 python3-venv python3-pip
-```
-
-### 2.2. Create app directories
-
-```bash
-mkdir -p /opt/visitor_log/collector
-mkdir -p /var/lib/visitor_log
-mkdir -p /var/www/html/visitor_log
+  cd visitor_analytics
+  python3 -m venv .venv
+  source .venv/bin/activate
+  cd collector
 ```
 
 ### 2.3. Deploy collector (FastAPI backend)
 
 ```bash
-cd /opt/visitor_log/collector
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+  cd visitor_analytics/collector
+  pip install -r requirements.txt
 ```
 
 Initialize the database:
@@ -64,14 +58,17 @@ Create systemd service `/etc/systemd/system/visitor-collector.service`:
 
 ```ini
 [Unit]
-Description=Visitor Analytics Collector
+Description=Visitor Analytics Collector (FastAPI)
 After=network.target
 
 [Service]
 User=www-data
-WorkingDirectory=/opt/visitor_log/collector
-Environment="DATABASE_URL=sqlite:////var/lib/visitor_log/analytics.sqlite3"
-ExecStart=/opt/visitor_log/collector/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 9000
+Group=www-data
+WorkingDirectory=/var/www/html/visitor_analytics/collector
+Environment=DATABASE_URL=sqlite:////var/www/html/visitor_analytics/data/analytics.sqlite3
+Environment=MAXMIND_DB=/var/www/html/visitor_analytics/geo/GeoLite2-City.mmdb
+Environment=ALLOWED_ORIGINS=tglauner.com,localhost,127.0.0.1,course-xva-essentials.tglauner.com
+ExecStart=/var/www/html/visitor_analytics/collector/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 9000 --workers 2
 Restart=always
 
 [Install]
@@ -83,15 +80,10 @@ Enable + start:
 ```bash
 systemctl daemon-reexec
 systemctl enable --now visitor-collector
+systemctl restart visitor-collector
 ```
 
-### 2.4. Deploy dashboard (frontend)
-
-```bash
-rsync -avz visitor_log/ /var/www/html/visitor_log/
-```
-
-### 2.5. Apache reverse proxy
+### 2.4. Apache reverse proxy
 
 Edit `/etc/apache2/sites-enabled/tglauner-ssl.conf`:
 
@@ -134,13 +126,12 @@ To capture outbound clicks and page views across all courses, add the tracking s
 At the **bottom of `<body>`** in each course landing page:
 
 ```html
-<script src="/js/tracking.js" defer></script>
+    <script src="/js/tracking.js" defer data-vite-ignore></script>
 ```
 
 Make sure `/js/tracking.js` is deployed into `/var/www/html/js/tracking.js` or apache below is added as alias.
-We used alias to keep everything in visitor_analytics contained.
+We used alias to /js/tracking.js to keep everything in visitor_analytics contained.
 
-This script automatically records page views and outbound link clicks.
 Apache also needs to be updated
 ```
         # Tracking script (new path)
@@ -175,6 +166,7 @@ The collector extracts coupon codes from `href` automatically.
 * `/frtb_fundamentals/index.html`
 * `/mastering_interest_rate_derivatives/index.html`
 * `/mastering_mbs_and_abs/index.html`
+* `/course-xva-essentials.tglauner.com/index.html`
 
 ### 3.4. React/Vite apps (Talkshow & AI Value Advisor)
 
