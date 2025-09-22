@@ -47,9 +47,6 @@
       ["Page Views", s.page_views],
       ["Udemy Clicks", s.outbound_clicks],
     ];
-    if (s.xva_domain) {
-      tiles.push(["XVA Clicks", s.xva_clicks ?? 0]);
-    }
     tiles.push(
       ["Orders", s.orders],
       ["Net Revenue", `$${(+s.net_revenue).toFixed(2)}`],
@@ -116,12 +113,12 @@
       .join("");
   }
 
-  async function loadXvaClicks() {
+  async function loadXvaTraffic() {
     const section = document.getElementById("xva");
     if (!section) return;
     let d;
     try {
-      d = await fetchJSON("/api/metrics/xva_clicks");
+      d = await fetchJSON("/api/metrics/xva_traffic");
     } catch (err) {
       section.style.display = "none";
       return;
@@ -134,46 +131,35 @@
       return;
     }
     section.style.display = "";
-    const total = d.total_clicks || 0;
-    const visitors = d.unique_visitors || 0;
+    const totals = d.totals || {};
+    const visitors = totals.visitors ?? 0;
+    const sessions = totals.sessions ?? 0;
+    const views = totals.views ?? 0;
+    const visitorsEl = document.getElementById("xva-visitors");
+    const sessionsEl = document.getElementById("xva-sessions");
+    const viewsEl = document.getElementById("xva-views");
+    if (visitorsEl) visitorsEl.textContent = visitors;
+    if (sessionsEl) sessionsEl.textContent = sessions;
+    if (viewsEl) viewsEl.textContent = views;
     if (summary) {
-      summary.textContent = total
-        ? `${total} clicks to ${domain} from ${visitors} unique visitor${
-            visitors === 1 ? "" : "s"
-          }`
-        : `No clicks to ${domain} in this range yet.`;
+      summary.textContent = views
+        ? `${views} page view${views === 1 ? "" : "s"} on ${domain}`
+        : `No page views on ${domain} in this range yet.`;
     }
-    const pageRows = d.by_page || [];
-    const pageBody = document.querySelector("#xvaByPage tbody");
+    const pageRows = d.pages || [];
+    const pageBody = document.querySelector("#xva-by-page tbody");
     if (pageBody) {
       pageBody.innerHTML = pageRows.length
         ? pageRows
             .map(
               (r) => `
       <tr>
-        <td>${r.path || "/"}</td>
-        <td>${r.clicks}</td>
-        <td>${r.visitors}</td>
+        <td>${r.page || "/"}</td>
+        <td>${r.views}</td>
       </tr>`
             )
             .join("")
-        : emptyRow(3, "No tracked clicks yet");
-    }
-    const locRows = d.by_location || [];
-    const locBody = document.querySelector("#xvaByLocation tbody");
-    if (locBody) {
-      locBody.innerHTML = locRows.length
-        ? locRows
-            .map(
-              (r) => `
-      <tr>
-        <td>${r.country || "?"}</td>
-        <td>${r.region || "?"}</td>
-        <td>${r.clicks}</td>
-      </tr>`
-            )
-            .join("")
-        : emptyRow(3, "No location data yet");
+        : emptyRow(2, "No page views yet");
     }
   }
 
@@ -234,7 +220,7 @@
       loadPages(),
       loadCoupons(),
       loadLocations(),
-      loadXvaClicks(),
+      loadXvaTraffic(),
     ]);
   }
 

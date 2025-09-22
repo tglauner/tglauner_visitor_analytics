@@ -79,6 +79,7 @@ app.add_middleware(
 class Event(BaseModel):
     ts: str; uid: str; session_id: str; event_name: str
     path: Optional[str] = None; title: Optional[str] = None; referrer: Optional[str] = None
+    host: Optional[str] = None
     href: Optional[str] = None; target_domain: Optional[str] = None; button_id: Optional[str] = None; course_slug: Optional[str] = None; coupon: Optional[str] = None
     utm_source: Optional[str] = None; utm_medium: Optional[str] = None; utm_campaign: Optional[str] = None
     viewport: Optional[Dict[str, Any]] = None; percent: Optional[int] = None
@@ -157,6 +158,7 @@ async def collect(req: Request, batch: Batch):
                 'percent': e.percent,
                 'target_domain': e.target_domain,
                 'app_id': e.app_id,
+                'host': e.host,
             }),
             e.time_on_page_ms,
         ))
@@ -320,6 +322,65 @@ def _domain_click_metrics(domain: str, start: str, end: str):
         'unique_visitors': int(totals.get('visitors', 0) or 0),
         'by_page': by_page,
         'by_location': by_location,
+    }
+
+
+@app.get('/api/metrics/xva_traffic')
+def metrics_xva_traffic(start: Optional[str] = None, end: Optional[str] = None, domain: Optional[str] = None):
+    s, e = parse_range(start, end)
+    target = normalize_domain(domain) if domain is not None else XVA_DOMAIN
+    if not target:
+        return {
+            'range': {'start': s, 'end': e},
+            'domain': None,
+            'totals': {'views': 0, 'sessions': 0, 'visitors': 0},
+            'pages': [],
+        }
+
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT
+            COUNT(*) AS views,
+            COUNT(DISTINCT session_id) AS sessions,
+            COUNT(DISTINCT uid) AS visitors
+        FROM events_raw
+        WHERE event_name='page_view'
+          AND ts BETWEEN ? AND ?
+          AND json_extract(props_json, '$.host') = ?
+        """,
+        (s, e, target),
+    )
+    row = cur.fetchone()
+    totals = {
+        'views': int(row['views'] or 0) if row else 0,
+        'sessions': int(row['sessions'] or 0) if row else 0,
+        'visitors': int(row['visitors'] or 0) if row else 0,
+    }
+
+    cur.execute(
+        """
+        SELECT COALESCE(path, '/') AS page, COUNT(*) AS views
+        FROM events_raw
+        WHERE event_name='page_view'
+          AND ts BETWEEN ? AND ?
+          AND json_extract(props_json, '$.host') = ?
+        GROUP BY path
+        ORDER BY views DESC
+        LIMIT 50
+        """,
+        (s, e, target),
+    )
+    pages = [
+        {'page': r['page'] or '/', 'views': int(r['views'] or 0)}
+        for r in cur.fetchall()
+    ]
+
+    return {
+        'range': {'start': s, 'end': e},
+        'domain': target,
+        'totals': totals,
+        'pages': pages,
     }
 
 
