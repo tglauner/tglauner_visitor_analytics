@@ -166,11 +166,14 @@
   }
   setInterval(fl, C.flushMs);
   addEventListener("beforeunload", fl);
+  function currentPath() {
+    return location.pathname + (location.hash ? location.hash : "");
+  }
   function pg() {
     pageStart = Date.now();
     en({
       event_name: "page_view",
-      path: location.pathname,
+      path: currentPath(),
       title: document.title,
       referrer: document.referrer || null,
       ...utms(location.href),
@@ -183,6 +186,7 @@
     setTimeout(pg, 0);
   };
   addEventListener("popstate", pg);
+  addEventListener("hashchange", pg);
   let maxPct = 0;
   addEventListener(
     "scroll",
@@ -196,7 +200,7 @@
       if (pct > maxPct) {
         [25, 50, 75, 100].forEach((t) => {
           if (maxPct < t && pct >= t)
-            en({ event_name: "scroll", path: location.pathname, percent: t });
+            en({ event_name: "scroll", path: currentPath(), percent: t });
         });
         maxPct = pct;
       }
@@ -216,7 +220,7 @@
         a.textContent.trim().slice(0, 40);
       en({
         event_name: "outbound_click",
-        path: location.pathname,
+        path: currentPath(),
         href: a.href,
         target_domain: out.target_domain || null,
         button_id: id,
@@ -231,7 +235,7 @@
     if (document.visibilityState === "hidden") {
       en({
         event_name: "page_unload",
-        path: location.pathname,
+        path: currentPath(),
         time_on_page_ms: Date.now() - pageStart,
       });
       fl();
