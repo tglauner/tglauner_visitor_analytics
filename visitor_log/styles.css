@@ -165,18 +165,27 @@ footer {
   font-size: 12px;
 }
 
-#xva .two-col {
-  gap: 16px;
+#xva .xva-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 12px 0 16px;
 }
 
-#xva .two-col > div {
+#xva .xva-totals .tile {
+  background: var(--card);
+  border: 1px solid #223;
+  border-radius: 10px;
+}
+
+#xva .card {
   background: var(--card);
   border: 1px solid #223;
   border-radius: 10px;
   padding: 12px;
 }
 
-#xva .two-col table {
+#xva .card table {
   margin-top: 8px;
 }
 

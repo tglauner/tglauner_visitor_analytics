@@ -70,35 +70,33 @@
       </div>
     </section>
     <section id="xva">
-      <h2>XVA Essentials Clicks</h2>
+      <h2>XVA Essentials Traffic</h2>
       <p class="muted" id="xvaSummary"></p>
-      <div class="two-col">
-        <div>
-          <h3>By Source Page</h3>
-          <table id="xvaByPage">
-            <thead>
-              <tr>
-                <th>Page</th>
-                <th>Clicks</th>
-                <th>Visitors</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+      <div id="xvaTotals" class="xva-totals">
+        <div class="tile">
+          <div class="label">Visitors</div>
+          <div class="value" id="xva-visitors">0</div>
         </div>
-        <div>
-          <h3>By Location</h3>
-          <table id="xvaByLocation">
-            <thead>
-              <tr>
-                <th>Country</th>
-                <th>Region</th>
-                <th>Clicks</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+        <div class="tile">
+          <div class="label">Sessions</div>
+          <div class="value" id="xva-sessions">0</div>
         </div>
+        <div class="tile">
+          <div class="label">Views</div>
+          <div class="value" id="xva-views">0</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Top Pages</h3>
+        <table id="xva-by-page">
+          <thead>
+            <tr>
+              <th>Page</th>
+              <th>Views</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
     </section>
     <div id="detailModal" class="modal hidden">

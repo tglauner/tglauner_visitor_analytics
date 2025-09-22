@@ -3,11 +3,45 @@
   if (navigator.doNotTrack === "1") return;
   if (window.__tg_analytics_loaded__) return;
   window.__tg_analytics_loaded__ = true;
+
+  const globalCfg =
+    window.tgAnalyticsConfig && typeof window.tgAnalyticsConfig === "object"
+      ? window.tgAnalyticsConfig
+      : {};
+
+  function resolveCollector() {
+    const direct =
+      typeof globalCfg.collector === "string" && globalCfg.collector.trim()
+        ? globalCfg.collector.trim()
+        : null;
+    if (direct) return direct;
+
+    const base =
+      typeof globalCfg.apiBase === "string" && globalCfg.apiBase.trim()
+        ? globalCfg.apiBase.trim().replace(/\/+$/, "")
+        : "";
+    if (base) {
+      let path =
+        typeof globalCfg.collectorPath === "string" &&
+        globalCfg.collectorPath.trim()
+          ? globalCfg.collectorPath.trim()
+          : "/collect";
+      if (/^https?:\/\//i.test(path)) {
+        return path;
+      }
+      if (!path.startsWith("/")) path = "/" + path;
+      return base + path;
+    }
+
+    if (location.hostname === "localhost" || location.hostname.startsWith("127.")) {
+      return "http://127.0.0.1:9000/collect";
+    }
+
+    return "/collect";
+  }
+
   const C = {
-    collector:
-      location.hostname === "localhost" || location.hostname.startsWith("127.")
-        ? "http://127.0.0.1:9000/collect"
-        : "/collect",
+    collector: resolveCollector(),
     batchSize: 20,
     flushMs: 5000,
     sessionTimeout: 1800000,
@@ -138,8 +172,22 @@
     ev.ts = new Date().toISOString();
     ev.uid = uid();
     ev.session_id = sid();
-    ev.viewport = { w: innerWidth, h: innerHeight, dpr: devicePixelRatio || 1 };
-    if (C.appId) {
+    if (!ev.viewport) {
+      ev.viewport = { w: innerWidth, h: innerHeight, dpr: devicePixelRatio || 1 };
+    }
+    if (!ev.host) {
+      ev.host = location.hostname;
+    }
+    if (typeof ev.path === "undefined") {
+      ev.path = location.pathname;
+    }
+    if (typeof ev.referrer === "undefined") {
+      ev.referrer = document.referrer || null;
+    }
+    if (typeof ev.title === "undefined") {
+      ev.title = document.title;
+    }
+    if (C.appId && !ev.app_id) {
       ev.app_id = C.appId;
     }
     Q.push(ev);
@@ -160,21 +208,36 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ events: b }),
           keepalive: true,
+          mode: "cors",
+          credentials: "omit",
         });
       }
     } catch (e) {}
   }
   setInterval(fl, C.flushMs);
   addEventListener("beforeunload", fl);
+  function track(eventName, props = {}) {
+    const payload = { event_name: eventName };
+    if (props && typeof props === "object") {
+      Object.keys(props).forEach((key) => {
+        if (typeof props[key] !== "undefined") {
+          payload[key] = props[key];
+        }
+      });
+    }
+    if (eventName === "page_view") {
+      const utmValues = utms(location.href);
+      ["utm_source", "utm_medium", "utm_campaign"].forEach((key) => {
+        if (typeof payload[key] === "undefined") {
+          payload[key] = utmValues[key];
+        }
+      });
+    }
+    en(payload);
+  }
   function pg() {
     pageStart = Date.now();
-    en({
-      event_name: "page_view",
-      path: location.pathname,
-      title: document.title,
-      referrer: document.referrer || null,
-      ...utms(location.href),
-    });
+    track("page_view");
   }
   pg();
   const _ps = history.pushState;
@@ -243,5 +306,6 @@
     setAppId: (id) => {
       C.appId = cleanAppId(id);
     },
+    track,
   };
 })();

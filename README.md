@@ -195,6 +195,56 @@ dashboard's detail view can display which app generated each event.
 
 ---
 
+### 3.5. XVA Essentials subdomain (`course-xva-essentials.tglauner.com`)
+
+To record page views on the standalone XVA course site while still posting analytics data to
+`tglauner.com`, add the global configuration **before** the shared tracker on the subdomain.
+
+In `/var/www/html/course-xva-essentials/index.html` (or the template powering that site), insert:
+
+```html
+<script>
+  window.tgAnalyticsConfig = {
+    apiBase: "https://tglauner.com",
+    appId: "xva_course"
+  };
+</script>
+<script src="https://tglauner.com/js/tracking.js?v=20250921c" defer></script>
+```
+
+* `apiBase` forces the tracker to post to `https://tglauner.com/collect`, even though the page is
+  being served from the course subdomain.
+* `appId` tags each event so the dashboard can attribute it to the course.
+* Update the cache-busting query string (`?v=...`) whenever you deploy a new `tracking.js` build to
+  `/var/www/html/visitor_analytics/tracking/tracking.js`.
+
+After updating the backend code, restart the collector to load the new endpoint:
+
+```bash
+sudo systemctl restart visitor-collector
+```
+
+#### Quick verification
+
+1. Open DevTools on `https://course-xva-essentials.tglauner.com/` and reload — you should see a
+   `POST https://tglauner.com/collect` request.
+2. Inspect the SQLite store directly (adjust the path to match your `DATABASE_URL` — the default
+   deployment stores the DB at `/var/lib/visitor_log/analytics.sqlite3`):
+
+   ```bash
+   sqlite3 /var/www/html/visitor_analytics/data/analytics.sqlite3 \
+   "SELECT event_name, json_extract(props_json,'$.host') AS host, path, ts
+    FROM events_raw
+    WHERE event_name='page_view'
+      AND json_extract(props_json,'$.host')='course-xva-essentials.tglauner.com'
+    ORDER BY ts DESC LIMIT 10;"
+   ```
+
+3. Load `https://tglauner.com/visitor_log/` with the same time range — the “XVA Essentials Traffic”
+   panel will display visitors, sessions, views, and top pages for the subdomain.
+
+---
+
 ## 4. Maintenance
 
 * **Logs**:
