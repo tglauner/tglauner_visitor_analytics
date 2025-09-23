@@ -243,6 +243,10 @@ systemctl stop visitor-collector
 cd visitor_analytics
 rm data/analytics.sqlite3
 sqlite3 data/analytics.sqlite3 < collector/migrations/001_init.sql
+sqlite3 data/analytics.sqlite3 < collector/migrations/002_add_time_on_page.sql
+sudo chown www-data:www-data /var/www/html/visitor_analytics/data/analytics.sqlite3*
+sudo chown www-data:www-data /var/www/html/visitor_analytics/data
+sudo chmod 775 /var/www/html/visitor_analytics/data
 systemctl start visitor-collector
 ```
 Alternatively, run `DELETE FROM` on each table instead of removing the file.
