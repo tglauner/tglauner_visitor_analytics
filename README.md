@@ -237,23 +237,20 @@ DELETE FROM udemy_orders WHERE order_id = '<order_id>';
 The collector uses the `DATABASE_URL` environment variable to locate the DB file (defaults to `/var/lib/visitor_log/analytics.sqlite3`).
 To wipe everything and start fresh:
 
-1. Stop the collector service:
-
-   ```bash
-   systemctl stop visitor-collector
-   ```
-
-2. Delete and reinitialize the database:
-
-   ```bash
-   rm /var/lib/visitor_log/analytics.sqlite3
-   sqlite3 /var/lib/visitor_log/analytics.sqlite3 < collector/migrations/001_init.sql
-   ```
-
+1. Stop, delete and reinitialize the database, start
+```bash
+systemctl stop visitor-collector
+cd visitor_analytics
+rm data/analytics.sqlite3
+sqlite3 data/analytics.sqlite3 < collector/migrations/001_init.sql
+systemctl start visitor-collector
+```
 Alternatively, run `DELETE FROM` on each table instead of removing the file.
 
 ### 6.3 Exclude Test Traffic
 
 * Restrict collector access to production hosts by setting `ALLOWED_ORIGINS` before starting the service.
 * During tests, disable the tracking script by calling `window.tgAnalytics.setSampleRate(0);` on the client side.
+
+
 
