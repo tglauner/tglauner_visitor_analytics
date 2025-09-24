@@ -9,7 +9,7 @@ from user_agents import parse as ua_parse
 from dotenv import load_dotenv
 load_dotenv()
 
-from reporting_filters import ReportingFilterLoader
+from collector.reporting_filters import ReportingFilterLoader
 
 GEO_READER = None
 try:
