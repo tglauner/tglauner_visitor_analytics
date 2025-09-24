@@ -403,7 +403,7 @@ def metrics_xva_clicks(start: Optional[str] = None, end: Optional[str] = None, d
         **metrics,
     }
 
-from importer.udemy_csv_importer import parse_udemy_csv
+from collector.importer.udemy_csv_importer import parse_udemy_csv
 @app.post('/api/import/udemy_csv')
 async def import_udemy_csv(file: UploadFile = File(...)):
     data = await file.read(); rows = parse_udemy_csv(data); n=0
