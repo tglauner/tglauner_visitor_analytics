@@ -9,6 +9,8 @@ from user_agents import parse as ua_parse
 from dotenv import load_dotenv
 load_dotenv()
 
+from reporting_filters import ReportingFilterLoader
+
 GEO_READER = None
 try:
     from geoip2.database import Reader as GeoReader
@@ -19,6 +21,21 @@ DB_URL = os.getenv('DATABASE_URL','sqlite:////var/lib/visitor_log/analytics.sqli
 DB_PATH = DB_URL.replace('sqlite:////','/') if DB_URL.startswith('sqlite:////') else DB_URL.replace('sqlite:///','/')
 ALLOWED_ORIGINS = [h.strip().lower() for h in os.getenv('ALLOWED_ORIGINS','tglauner.com,localhost,127.0.0.1').split(',')]
 MAXMIND_DB = os.getenv('MAXMIND_DB','/opt/visitor_log/geo/GeoLite2-City.mmdb')
+REPORTING_FILTERS_PATH = os.getenv(
+    'REPORTING_FILTERS_PATH',
+    os.path.join(os.path.dirname(__file__), 'config', 'reporting_filters.json'),
+)
+
+
+_filters = ReportingFilterLoader(REPORTING_FILTERS_PATH)
+
+
+def excluded_ips() -> List[str]:
+    return _filters.excluded_ips()
+
+
+def ip_filter_clause(column: str = 'ip'):
+    return _filters.sql_fragment(column)
 def normalize_domain(value: Optional[str]) -> Optional[str]:
     if not value:
         return None
@@ -173,22 +190,41 @@ def healthz():
 
 @app.get('/api/metrics/summary')
 def metrics_summary(start: Optional[str] = None, end: Optional[str] = None):
-    s,e = parse_range(start,end); cur = conn.cursor()
-    cur.execute('SELECT COUNT(DISTINCT uid) AS v FROM events_raw WHERE ts BETWEEN ? AND ?', (s,e)); visitors = cur.fetchone()['v'] or 0
-    cur.execute('SELECT COUNT(DISTINCT session_id) AS s FROM events_raw WHERE ts BETWEEN ? AND ?', (s,e)); sessions = cur.fetchone()['s'] or 0
-    cur.execute("SELECT COUNT(*) AS pv FROM events_raw WHERE event_name='page_view' AND ts BETWEEN ? AND ?", (s,e)); page_views = cur.fetchone()['pv'] or 0
-    cur.execute("SELECT COUNT(*) AS oc FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?", (s,e)); out_clicks = cur.fetchone()['oc'] or 0
+    s, e = parse_range(start, end)
+    cur = conn.cursor()
+    clause, params = ip_filter_clause()
+    cur.execute(
+        f'SELECT COUNT(DISTINCT uid) AS v FROM events_raw WHERE ts BETWEEN ? AND ?{clause}',
+        (s, e, *params),
+    )
+    visitors = cur.fetchone()['v'] or 0
+    cur.execute(
+        f'SELECT COUNT(DISTINCT session_id) AS s FROM events_raw WHERE ts BETWEEN ? AND ?{clause}',
+        (s, e, *params),
+    )
+    sessions = cur.fetchone()['s'] or 0
+    cur.execute(
+        f"SELECT COUNT(*) AS pv FROM events_raw WHERE event_name='page_view' AND ts BETWEEN ? AND ?{clause}",
+        (s, e, *params),
+    )
+    page_views = cur.fetchone()['pv'] or 0
+    cur.execute(
+        f"SELECT COUNT(*) AS oc FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?{clause}",
+        (s, e, *params),
+    )
+    out_clicks = cur.fetchone()['oc'] or 0
     xva_clicks = None
     if XVA_DOMAIN:
         cur.execute(
-            """
+            f"""
             SELECT COUNT(*) AS xc
             FROM events_raw
             WHERE event_name='outbound_click'
               AND ts BETWEEN ? AND ?
+              {clause}
               AND props_host(props_json) = ?
             """,
-            (s, e, XVA_DOMAIN),
+            (s, e, *params, XVA_DOMAIN),
         )
         row = cur.fetchone()
         xva_clicks = int(row['xc'] or 0) if row else 0
@@ -198,8 +234,13 @@ def metrics_summary(start: Optional[str] = None, end: Optional[str] = None):
 
 @app.get('/api/metrics/coupons')
 def metrics_coupons(start: Optional[str] = None, end: Optional[str] = None):
-    s,e = parse_range(start,end); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(coupon,'') AS coupon, COALESCE(course_slug,'') AS course_slug, COUNT(*) AS clicks FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ? GROUP BY coupon, course_slug", (s,e))
+    s, e = parse_range(start, end)
+    cur = conn.cursor()
+    clause, params = ip_filter_clause()
+    cur.execute(
+        f"SELECT COALESCE(coupon,'') AS coupon, COALESCE(course_slug,'') AS course_slug, COUNT(*) AS clicks FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?{clause} GROUP BY coupon, course_slug",
+        (s, e, *params),
+    )
     clicks = {(r['coupon'], r['course_slug']): r['clicks'] for r in cur.fetchall()}
     cur.execute("SELECT COALESCE(coupon,'') AS coupon, COALESCE(course_slug,'') AS course_slug, COUNT(*) AS orders, COALESCE(SUM(net),0) AS net FROM udemy_orders WHERE order_ts BETWEEN ? AND ? GROUP BY coupon, course_slug", (s,e))
     out_rows = []; seen=set()
@@ -212,14 +253,25 @@ def metrics_coupons(start: Optional[str] = None, end: Optional[str] = None):
 
 @app.get('/api/metrics/top_pages')
 def metrics_top_pages(start: Optional[str] = None, end: Optional[str] = None, limit: int = 50):
-    s,e = parse_range(start,end); cur = conn.cursor()
-    cur.execute("SELECT path, COUNT(*) AS views FROM events_raw WHERE event_name='page_view' AND ts BETWEEN ? AND ? GROUP BY path ORDER BY views DESC LIMIT ?", (s,e,limit))
+    s, e = parse_range(start, end)
+    cur = conn.cursor()
+    clause, params = ip_filter_clause()
+    cur.execute(
+        f"SELECT path, COUNT(*) AS views FROM events_raw WHERE event_name='page_view' AND ts BETWEEN ? AND ?{clause} GROUP BY path ORDER BY views DESC LIMIT ?",
+        (s, e, *params, limit),
+    )
     page_rows = cur.fetchall(); paths = [r['path'] for r in page_rows if r['path'] is not None]
     if not paths: return {'range':{'start':s,'end':e},'rows':[]}
     placeholders = ','.join(['?']*len(paths))
-    cur.execute(f"SELECT path, COUNT(*) AS clicks FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ? AND path IN ({placeholders}) GROUP BY path", (s,e,*paths))
+    cur.execute(
+        f"SELECT path, COUNT(*) AS clicks FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?{clause} AND path IN ({placeholders}) GROUP BY path",
+        (s, e, *params, *paths),
+    )
     clicks_by_path = {r['path']: r['clicks'] for r in cur.fetchall()}
-    cur.execute("SELECT id, ts, path, coupon, course_slug FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ? ORDER BY coupon, course_slug, ts", (s,e))
+    cur.execute(
+        f"SELECT id, ts, path, coupon, course_slug FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?{clause} ORDER BY coupon, course_slug, ts",
+        (s, e, *params),
+    )
     clicks = [dict(r) for r in cur.fetchall()]
     from collections import defaultdict; by_key=defaultdict(list)
     for c in clicks: by_key[((c.get('coupon') or ''),(c.get('course_slug') or ''))].append(c)
@@ -247,10 +299,12 @@ def metrics_top_pages(start: Optional[str] = None, end: Optional[str] = None, li
 
 @app.get('/api/metrics/page_details')
 def metrics_page_details(path: str, start: Optional[str] = None, end: Optional[str] = None):
-    s,e = parse_range(start,end); cur = conn.cursor()
+    s, e = parse_range(start, end)
+    cur = conn.cursor()
+    clause, params = ip_filter_clause()
     cur.execute(
-        "SELECT uid, ip, ts, event_name, path, referrer, button_id, geo_country, device, time_on_page_ms, props_json FROM events_raw WHERE path = ? AND ts BETWEEN ? AND ? ORDER BY ts DESC",
-        (path, s, e),
+        f"SELECT uid, ip, ts, event_name, path, referrer, button_id, geo_country, device, time_on_page_ms, props_json FROM events_raw WHERE path = ? AND ts BETWEEN ? AND ?{clause} ORDER BY ts DESC",
+        (path, s, e, *params),
     )
     rows = []
     for r in cur.fetchall():
@@ -266,33 +320,39 @@ def metrics_page_details(path: str, start: Optional[str] = None, end: Optional[s
 
 @app.get('/api/metrics/locations')
 def metrics_locations(start: Optional[str] = None, end: Optional[str] = None):
-    s,e = parse_range(start,end); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(geo_country,'?') AS country, COALESCE(geo_region,'?') AS region, COUNT(DISTINCT uid) AS visitors, COUNT(DISTINCT session_id) AS sessions, SUM(CASE WHEN event_name='page_view' THEN 1 ELSE 0 END) AS views FROM events_raw WHERE ts BETWEEN ? AND ? GROUP BY country, region ORDER BY visitors DESC", (s,e))
+    s, e = parse_range(start, end)
+    cur = conn.cursor()
+    clause, params = ip_filter_clause()
+    cur.execute(
+        f"SELECT COALESCE(geo_country,'?') AS country, COALESCE(geo_region,'?') AS region, COUNT(DISTINCT uid) AS visitors, COUNT(DISTINCT session_id) AS sessions, SUM(CASE WHEN event_name='page_view' THEN 1 ELSE 0 END) AS views FROM events_raw WHERE ts BETWEEN ? AND ?{clause} GROUP BY country, region ORDER BY visitors DESC",
+        (s, e, *params),
+    )
     rows=[dict(r) for r in cur.fetchall()]
     return {'range':{'start':s,'end':e},'rows':rows}
 
 def _domain_click_metrics(domain: str, start: str, end: str):
     cur = conn.cursor()
-    params = (start, end, domain)
+    clause, ip_params = ip_filter_clause()
+    params = (start, end, *ip_params, domain)
     cur.execute(
-        """
+        f"""
         SELECT COUNT(*) AS clicks, COUNT(DISTINCT uid) AS visitors
         FROM events_raw
         WHERE event_name='outbound_click'
-          AND ts BETWEEN ? AND ?
+          AND ts BETWEEN ? AND ?{clause}
           AND props_host(props_json) = ?
         """,
         params,
     )
     totals = dict(cur.fetchone() or {})
     cur.execute(
-        """
+        f"""
         SELECT COALESCE(path,'/') AS path,
                COUNT(*) AS clicks,
                COUNT(DISTINCT uid) AS visitors
         FROM events_raw
         WHERE event_name='outbound_click'
-          AND ts BETWEEN ? AND ?
+          AND ts BETWEEN ? AND ?{clause}
           AND props_host(props_json) = ?
         GROUP BY path
         ORDER BY clicks DESC
@@ -301,13 +361,13 @@ def _domain_click_metrics(domain: str, start: str, end: str):
     )
     by_page = [dict(r) for r in cur.fetchall()]
     cur.execute(
-        """
+        f"""
         SELECT COALESCE(geo_country,'?') AS country,
                COALESCE(geo_region,'?') AS region,
                COUNT(*) AS clicks
         FROM events_raw
         WHERE event_name='outbound_click'
-          AND ts BETWEEN ? AND ?
+          AND ts BETWEEN ? AND ?{clause}
           AND props_host(props_json) = ?
         GROUP BY geo_country, geo_region
         ORDER BY clicks DESC
