@@ -237,19 +237,18 @@ DELETE FROM udemy_orders WHERE order_id = '<order_id>';
 The collector uses the `DATABASE_URL` environment variable to locate the DB file (defaults to `/var/lib/visitor_log/analytics.sqlite3`).
 To wipe everything and start fresh:
 
-1. Stop the collector service:
-
-   ```bash
-   systemctl stop visitor-collector
-   ```
-
-2. Delete and reinitialize the database:
-
-   ```bash
-   rm /var/lib/visitor_log/analytics.sqlite3
-   sqlite3 /var/lib/visitor_log/analytics.sqlite3 < collector/migrations/001_init.sql
-   ```
-
+1. Stop, delete and reinitialize the database, start
+```bash
+systemctl stop visitor-collector
+cd visitor_analytics
+rm data/analytics.sqlite3
+sqlite3 data/analytics.sqlite3 < collector/migrations/001_init.sql
+sqlite3 data/analytics.sqlite3 < collector/migrations/002_add_time_on_page.sql
+sudo chown www-data:www-data /var/www/html/visitor_analytics/data/analytics.sqlite3*
+sudo chown www-data:www-data /var/www/html/visitor_analytics/data
+sudo chmod 775 /var/www/html/visitor_analytics/data
+systemctl start visitor-collector
+```
 Alternatively, run `DELETE FROM` on each table instead of removing the file.
 
 ### 6.3 Exclude Test Traffic
@@ -284,4 +283,5 @@ If you don't need labels, you can shorten the file to a plain array of IPs:
 Changes are picked up automatically—no FastAPI restart is required. If you want to store the
 file elsewhere (for example under `/var/www/html/visitor_analytics/config/`), set the
 `REPORTING_FILTERS_PATH` environment variable in the `visitor-collector` service definition.
+
 
