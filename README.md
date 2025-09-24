@@ -256,5 +256,32 @@ Alternatively, run `DELETE FROM` on each table instead of removing the file.
 * Restrict collector access to production hosts by setting `ALLOWED_ORIGINS` before starting the service.
 * During tests, disable the tracking script by calling `window.tgAnalytics.setSampleRate(0);` on the client side.
 
+### 6.4 Reporting Filters (exclude internal IPs)
+
+The collector can hide internal or test traffic from every dashboard view by reading
+`collector/config/reporting_filters.json`. Update the `exclude.ip_addresses` list with
+any IPv4 or IPv6 addresses that should be ignored:
+
+```json
+{
+  "version": 1,
+  "exclude": {
+    "ip_addresses": [
+      { "value": "198.51.100.10", "label": "Home office" },
+      "203.0.113.42"
+    ]
+  }
+}
+```
+
+If you don't need labels, you can shorten the file to a plain array of IPs:
+
+```json
+["198.51.100.10", "203.0.113.42"]
+```
+
+Changes are picked up automatically—no FastAPI restart is required. If you want to store the
+file elsewhere (for example under `/var/www/html/visitor_analytics/config/`), set the
+`REPORTING_FILTERS_PATH` environment variable in the `visitor-collector` service definition.
 
 
