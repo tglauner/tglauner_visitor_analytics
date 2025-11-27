@@ -18,6 +18,17 @@
     );
   }
 
+  function formatDate(dt) {
+    if (!dt) return "";
+    const d = new Date(dt);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }
+
   function qs() {
     const start = $("#start").value
       ? new Date($("#start").value).toISOString()
@@ -189,13 +200,12 @@
       .map(
         (r) => `
       <tr>
-        <td>${r.uid}</td>
         <td>${r.ip || ""}</td>
-        <td>${r.ts}</td>
+        <td>${r.referrer || ""}</td>
+        <td>${formatDate(r.ts)}</td>
         <td>${r.event_name}</td>
         <td>${r.app_id || ""}</td>
         <td>${r.path || ""}</td>
-        <td>${r.referrer || ""}</td>
         <td>${r.button_id || ""}</td>
         <td>${r.target_domain || ""}</td>
         <td>${
@@ -207,6 +217,7 @@
         <td>${r.geo_country || ""}</td>
         <td>${r.device || ""}</td>
         <td>${r.time_on_page_ms ?? ""}</td>
+        <td>${r.uid}</td>
       </tr>`
       )
       .join("");
