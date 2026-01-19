@@ -81,7 +81,9 @@
       .map(
         (r) => `
       <tr>
-        <td>${r.path || "/"}</td>
+        <td data-host="${r.host || ""}" data-path="${r.path || "/"}">${
+          r.display_path || r.path || "/"
+        }</td>
         <td>${r.views}</td>
         <td>${r.udemy_clicks}</td>
         <td>${r.orders}</td>
@@ -188,14 +190,17 @@
     }
   }
 
-  async function loadPageDetails(path) {
+  async function loadPageDetails(path, host) {
     const q = qs();
-    const url = `/api/metrics/page_details?path=${encodeURIComponent(path)}${q ? "&" + q.slice(1) : ""}`;
+    const hostParam = host ? `&host=${encodeURIComponent(host)}` : "";
+    const url = `/api/metrics/page_details?path=${encodeURIComponent(path)}${hostParam}${q ? "&" + q.slice(1) : ""}`;
     const r = await fetch(API_BASE + url);
     if (!r.ok) return;
     const d = await r.json();
     const rows = d.rows || [];
-    document.querySelector("#detailPath").textContent = path;
+    document.querySelector("#detailPath").textContent = host
+      ? `https://${host}${path}`
+      : path;
     document.querySelector("#detailTable tbody").innerHTML = rows
       .map(
         (r) => `
@@ -233,10 +238,11 @@
   });
 
   document.querySelector("#pages tbody").addEventListener("dblclick", (e) => {
-    const tr = e.target.closest("tr");
-    if (!tr) return;
-    const path = tr.children[0].textContent;
-    loadPageDetails(path);
+    const cell = e.target.closest("td");
+    if (!cell) return;
+    const path = cell.dataset.path || cell.textContent;
+    const host = cell.dataset.host || "";
+    loadPageDetails(path, host);
   });
 
   async function refreshAll() {

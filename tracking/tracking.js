@@ -139,6 +139,9 @@
     ev.uid = uid();
     ev.session_id = sid();
     ev.viewport = { w: innerWidth, h: innerHeight, dpr: devicePixelRatio || 1 };
+    if (!ev.page_url) {
+      ev.page_url = location.href;
+    }
     if (C.appId) {
       ev.app_id = C.appId;
     }
@@ -176,6 +179,7 @@
       path: currentPath(),
       title: document.title,
       referrer: document.referrer || null,
+      page_url: location.href,
       ...utms(location.href),
     });
   }

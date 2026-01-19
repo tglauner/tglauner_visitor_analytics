@@ -69,6 +69,17 @@ def props_host_from_json(props_json: Optional[str]) -> str:
     normalized = normalize_domain(href)
     return normalized or ''
 
+def props_page_host_from_json(props_json: Optional[str]) -> str:
+    if not props_json:
+        return ''
+    try:
+        payload = json.loads(props_json)
+    except Exception:
+        return ''
+    page_url = payload.get('page_url') or payload.get('href')
+    normalized = normalize_domain(page_url)
+    return normalized or ''
+
 
 XVA_DOMAIN = normalize_domain(os.getenv('XVA_TARGET_DOMAIN', 'course-xva-essentials.tglauner.com'))
 if GeoReader and os.path.exists(MAXMIND_DB):
@@ -78,6 +89,7 @@ if GeoReader and os.path.exists(MAXMIND_DB):
 conn = sqlite3.connect(DB_PATH, check_same_thread=False, isolation_level=None)
 conn.row_factory = sqlite3.Row
 conn.create_function('props_host', 1, props_host_from_json)
+conn.create_function('props_page_host', 1, props_page_host_from_json)
 dblock = threading.Lock()
 app = FastAPI(title='Visitor Analytics Collector', version='1.0.0')
 
@@ -100,6 +112,7 @@ class Event(BaseModel):
     utm_source: Optional[str] = None; utm_medium: Optional[str] = None; utm_campaign: Optional[str] = None
     viewport: Optional[Dict[str, Any]] = None; percent: Optional[int] = None
     time_on_page_ms: Optional[int] = None; app_id: Optional[str] = None
+    page_url: Optional[str] = None
 class Batch(BaseModel):
     events: List[Event] = Field(default_factory=list)
 
@@ -174,6 +187,7 @@ async def collect(req: Request, batch: Batch):
                 'percent': e.percent,
                 'target_domain': e.target_domain,
                 'app_id': e.app_id,
+                'page_url': e.page_url,
             }),
             e.time_on_page_ms,
         ))
@@ -257,19 +271,45 @@ def metrics_top_pages(start: Optional[str] = None, end: Optional[str] = None, li
     cur = conn.cursor()
     clause, params = ip_filter_clause()
     cur.execute(
-        f"SELECT path, COUNT(*) AS views FROM events_raw WHERE event_name='page_view' AND ts BETWEEN ? AND ?{clause} GROUP BY path ORDER BY views DESC LIMIT ?",
+        f"""
+        SELECT COALESCE(props_page_host(props_json),'') AS host,
+               path,
+               COUNT(*) AS views
+        FROM events_raw
+        WHERE event_name='page_view' AND ts BETWEEN ? AND ?{clause}
+        GROUP BY host, path
+        ORDER BY views DESC
+        LIMIT ?
+        """,
         (s, e, *params, limit),
     )
-    page_rows = cur.fetchall(); paths = [r['path'] for r in page_rows if r['path'] is not None]
-    if not paths: return {'range':{'start':s,'end':e},'rows':[]}
-    placeholders = ','.join(['?']*len(paths))
+    page_rows = cur.fetchall()
+    if not page_rows:
+        return {'range':{'start':s,'end':e},'rows':[]}
     cur.execute(
-        f"SELECT path, COUNT(*) AS clicks FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?{clause} AND path IN ({placeholders}) GROUP BY path",
-        (s, e, *params, *paths),
+        f"""
+        SELECT COALESCE(props_page_host(props_json),'') AS host,
+               path,
+               COUNT(*) AS clicks
+        FROM events_raw
+        WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?{clause}
+        GROUP BY host, path
+        """,
+        (s, e, *params),
     )
-    clicks_by_path = {r['path']: r['clicks'] for r in cur.fetchall()}
+    clicks_by_path = {(r['host'] or '') + '|' + (r['path'] or '/'): r['clicks'] for r in cur.fetchall()}
     cur.execute(
-        f"SELECT id, ts, path, coupon, course_slug FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?{clause} ORDER BY coupon, course_slug, ts",
+        f"""
+        SELECT id,
+               ts,
+               path,
+               COALESCE(props_page_host(props_json),'') AS host,
+               coupon,
+               course_slug
+        FROM events_raw
+        WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?{clause}
+        ORDER BY coupon, course_slug, ts
+        """,
         (s, e, *params),
     )
     clicks = [dict(r) for r in cur.fetchall()]
@@ -288,23 +328,38 @@ def metrics_top_pages(start: Optional[str] = None, end: Optional[str] = None, li
         if not seq: continue
         times=[iso(c['ts']) for c in seq]; t=iso(o['order_ts']); idx=bisect.bisect_right(times,t)-1
         if idx>=0:
-            path=seq[idx]['path']
-            if path not in orders_by_path: orders_by_path[path]={'orders':0,'net':0.0}
-            orders_by_path[path]['orders']+=1; orders_by_path[path]['net']+=float(o.get('net') or 0.0)
+            host = seq[idx].get('host') or ''
+            path = seq[idx].get('path') or '/'
+            key = host + '|' + path
+            if key not in orders_by_path:
+                orders_by_path[key]={'orders':0,'net':0.0}
+            orders_by_path[key]['orders']+=1; orders_by_path[key]['net']+=float(o.get('net') or 0.0)
     rows=[]
     for r in page_rows:
-        p=r['path'] or '/'; v=r['views']; cks=clicks_by_path.get(p,0); o=orders_by_path.get(p,{'orders':0,'net':0.0}); cr=(o['orders']/cks*100.0) if cks else 0.0
-        rows.append({'path':p,'views':v,'udemy_clicks':cks,'orders':o['orders'],'net':round(o['net'],2),'cr_pct':round(cr,2)})
+        host = r['host'] or ''
+        p = r['path'] or '/'
+        key = host + '|' + p
+        v = r['views']
+        cks = clicks_by_path.get(key, 0)
+        o = orders_by_path.get(key, {'orders':0,'net':0.0})
+        cr = (o['orders']/cks*100.0) if cks else 0.0
+        display_path = f"https://{host}{p}" if host else p
+        rows.append({'host': host, 'path': p, 'display_path': display_path, 'views': v, 'udemy_clicks': cks, 'orders': o['orders'], 'net': round(o['net'],2), 'cr_pct': round(cr,2)})
     return {'range':{'start':s,'end':e},'rows':rows}
 
 @app.get('/api/metrics/page_details')
-def metrics_page_details(path: str, start: Optional[str] = None, end: Optional[str] = None):
+def metrics_page_details(path: str, host: Optional[str] = None, start: Optional[str] = None, end: Optional[str] = None):
     s, e = parse_range(start, end)
     cur = conn.cursor()
     clause, params = ip_filter_clause()
+    host_clause = ""
+    host_params: List[str] = []
+    if host:
+        host_clause = " AND props_page_host(props_json) = ?"
+        host_params.append(host)
     cur.execute(
-        f"SELECT uid, ip, ts, event_name, path, referrer, button_id, geo_country, device, time_on_page_ms, props_json FROM events_raw WHERE path = ? AND ts BETWEEN ? AND ?{clause} ORDER BY ts DESC",
-        (path, s, e, *params),
+        f"SELECT uid, ip, ts, event_name, path, referrer, button_id, geo_country, device, time_on_page_ms, props_json FROM events_raw WHERE path = ? AND ts BETWEEN ? AND ?{clause}{host_clause} ORDER BY ts DESC",
+        (path, s, e, *params, *host_params),
     )
     rows = []
     for r in cur.fetchall():
@@ -314,6 +369,7 @@ def metrics_page_details(path: str, start: Optional[str] = None, end: Optional[s
         d['href'] = props.get('href')
         d['target_domain'] = props.get('target_domain')
         d['app_id'] = props.get('app_id')
+        d['page_url'] = props.get('page_url')
         d.pop('props_json', None)
         rows.append(d)
     return {'range': {'start': s, 'end': e}, 'path': path, 'rows': rows}
