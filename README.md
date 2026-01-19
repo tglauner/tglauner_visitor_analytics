@@ -51,7 +51,7 @@ App lives in /var/www/html/visitor_analytics on droplet
 Initialize the database:
 
 ```bash
-sqlite3 /var/lib/visitor_log/analytics.sqlite3 < migrations/001_init.sql
+sqlite3 /var/www/html/visitor_analytics/data/analytics.sqlite3 < migrations/001_init.sql
 ```
 
 Create systemd service `/etc/systemd/system/visitor-collector.service`:
@@ -64,11 +64,12 @@ After=network.target
 [Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/html/visitor_analytics/collector
+WorkingDirectory=/var/www/html/visitor_analytics
+Environment=PYTHONPATH=/var/www/html/visitor_analytics
 Environment=DATABASE_URL=sqlite:////var/www/html/visitor_analytics/data/analytics.sqlite3
 Environment=MAXMIND_DB=/var/www/html/visitor_analytics/geo/GeoLite2-City.mmdb
 Environment=ALLOWED_ORIGINS=tglauner.com,localhost,127.0.0.1,course-xva-essentials.tglauner.com
-ExecStart=/var/www/html/visitor_analytics/collector/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 9000 --workers 2
+ExecStart=/var/www/html/visitor_analytics/.venv/bin/uvicorn collector.app:app --app-dir /var/www/html/visitor_analytics --host 127.0.0.1 --port 9000 --workers 2
 Restart=always
 
 [Install]
@@ -80,6 +81,24 @@ Enable + start:
 ```bash
 systemctl daemon-reexec
 systemctl enable --now visitor-collector
+systemctl restart visitor-collector
+```
+
+### 2.3.1. GeoIP database (for Locations)
+
+Locations are empty until a GeoLite2 City database is installed.
+
+```bash
+apt-get update
+apt-get install -y geoipupdate
+
+# add your MaxMind AccountID + LicenseKey
+sudo nano /etc/GeoIP.conf
+
+geoipupdate
+mkdir -p /var/www/html/visitor_analytics/geo
+ln -sf /usr/share/GeoIP/GeoLite2-City.mmdb /var/www/html/visitor_analytics/geo/GeoLite2-City.mmdb
+chown -h www-data:www-data /var/www/html/visitor_analytics/geo/GeoLite2-City.mmdb
 systemctl restart visitor-collector
 ```
 
@@ -198,7 +217,7 @@ dashboard's detail view can display which app generated each event.
 * **DB backup**:
 
   ```bash
-  cp /var/lib/visitor_log/analytics.sqlite3 /root/backups/analytics.sqlite3.$(date +%F)
+  cp /var/www/html/visitor_analytics/data/analytics.sqlite3 /root/backups/analytics.sqlite3.$(date +%F)
   ```
 * **Update coupons**: edit the HTML pages monthly to reflect the current coupon codes.
 
@@ -227,14 +246,14 @@ Events and Udemy orders are stored in the SQLite tables `events_raw` and `udemy_
 To remove individual rows, open the database and execute:
 
 ```bash
-sqlite3 /var/lib/visitor_log/analytics.sqlite3
+sqlite3 /var/www/html/visitor_analytics/data/analytics.sqlite3
 DELETE FROM events_raw WHERE id = <event_id>;
 DELETE FROM udemy_orders WHERE order_id = '<order_id>';
 ```
 
 ### 6.2 Reset the Database
 
-The collector uses the `DATABASE_URL` environment variable to locate the DB file (defaults to `/var/lib/visitor_log/analytics.sqlite3`).
+The collector uses the `DATABASE_URL` environment variable to locate the DB file (defaults to `/var/lib/visitor_log/analytics.sqlite3` if unset; production uses `/var/www/html/visitor_analytics/data/analytics.sqlite3`).
 To wipe everything and start fresh:
 
 1. Stop, delete and reinitialize the database, start
@@ -283,5 +302,3 @@ If you don't need labels, you can shorten the file to a plain array of IPs:
 Changes are picked up automatically—no FastAPI restart is required. If you want to store the
 file elsewhere (for example under `/var/www/html/visitor_analytics/config/`), set the
 `REPORTING_FILTERS_PATH` environment variable in the `visitor-collector` service definition.
-
-

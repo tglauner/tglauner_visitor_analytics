@@ -34,13 +34,13 @@ This checklist ensures that the tracking and dashboard remain accurate and produ
 * [ ] Check SQLite DB file size and integrity:
 
   ```bash
-  ls -lh /var/lib/visitor_log/analytics.sqlite3
-  sqlite3 /var/lib/visitor_log/analytics.sqlite3 "PRAGMA integrity_check;"
+  ls -lh /var/www/html/visitor_analytics/data/analytics.sqlite3
+  sqlite3 /var/www/html/visitor_analytics/data/analytics.sqlite3 "PRAGMA integrity_check;"
   ```
 * [ ] Backup database:
 
   ```bash
-  cp /var/lib/visitor_log/analytics.sqlite3 /root/backups/analytics.sqlite3.$(date +%F)
+  cp /var/www/html/visitor_analytics/data/analytics.sqlite3 /root/backups/analytics.sqlite3.$(date +%F)
   ```
 
 ---

@@ -1,4 +1,5 @@
 SHELL := /bin/bash
+DB_PATH ?= /var/www/html/visitor_analytics/data/analytics.sqlite3
 
 dev:
 	cd collector && \
@@ -7,4 +8,4 @@ dev:
 	uvicorn app:app --host 127.0.0.1 --port 9000 --reload
 
 migrate:
-	sqlite3 /var/lib/visitor_log/analytics.sqlite3 < collector/migrations/001_init.sql
+	sqlite3 $(DB_PATH) < collector/migrations/001_init.sql

@@ -403,9 +403,19 @@ def metrics_xva_clicks(start: Optional[str] = None, end: Optional[str] = None, d
         **metrics,
     }
 
-from collector.importer.udemy_csv_importer import parse_udemy_csv
+try:
+    from collector.importer.udemy_csv_importer import parse_udemy_csv
+    _UDEMY_IMPORT_ERROR = None
+except Exception as exc:
+    parse_udemy_csv = None
+    _UDEMY_IMPORT_ERROR = str(exc)
 @app.post('/api/import/udemy_csv')
 async def import_udemy_csv(file: UploadFile = File(...)):
+    if not parse_udemy_csv:
+        raise HTTPException(
+            status_code=503,
+            detail=f'Udemy CSV importer unavailable: {_UDEMY_IMPORT_ERROR or "unknown error"}',
+        )
     data = await file.read(); rows = parse_udemy_csv(data); n=0
     with dblock:
         for (order_id, order_ts, course_slug, coupon, currency, gross, net) in rows:
