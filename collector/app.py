@@ -51,6 +51,18 @@ def normalize_domain(value: Optional[str]) -> Optional[str]:
         return host or None
     except Exception:
         return None
+def base_url_from_headers(origin: str, referer: str) -> Optional[str]:
+    for candidate in (origin, referer):
+        if not candidate:
+            continue
+        try:
+            parsed = urlparse(candidate)
+            if parsed.scheme and parsed.netloc:
+                return f"{parsed.scheme}://{parsed.netloc}"
+        except Exception:
+            continue
+    return None
+
 
 
 def props_host_from_json(props_json: Optional[str]) -> str:
@@ -156,11 +168,15 @@ async def collect(req: Request, batch: Batch):
     origin = req.headers.get('origin',''); referer = req.headers.get('referer','')
     if not (allowed_host(origin) or allowed_host(referer)):
         raise HTTPException(status_code=403, detail='Forbidden origin')
+    base_url = base_url_from_headers(origin, referer)
     ip = get_ip(req); ua = req.headers.get('user-agent','')
     country, region = ip_to_geo(ip) if ip else (None,None)
     device, browser, osfam = ua_to_device(ua)
     rows = []
     for e in batch.events:
+        page_url = e.page_url
+        if not page_url and base_url and e.path:
+            page_url = f"{base_url}{e.path}"
         rows.append((
             e.uid,
             e.session_id,
@@ -187,7 +203,7 @@ async def collect(req: Request, batch: Batch):
                 'percent': e.percent,
                 'target_domain': e.target_domain,
                 'app_id': e.app_id,
-                'page_url': e.page_url,
+                'page_url': page_url,
             }),
             e.time_on_page_ms,
         ))
