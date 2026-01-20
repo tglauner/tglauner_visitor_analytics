@@ -51,7 +51,7 @@ def normalize_domain(value: Optional[str]) -> Optional[str]:
         return host or None
     except Exception:
         return None
-def base_url_from_headers(origin: str, referer: str) -> Optional[str]:
+def base_url_from_headers(origin: str, referer: str, host: Optional[str] = None, proto: Optional[str] = None) -> Optional[str]:
     for candidate in (origin, referer):
         if not candidate:
             continue
@@ -61,6 +61,9 @@ def base_url_from_headers(origin: str, referer: str) -> Optional[str]:
                 return f"{parsed.scheme}://{parsed.netloc}"
         except Exception:
             continue
+    if host:
+        scheme = (proto or 'https').strip()
+        return f"{scheme}://{host}"
     return None
 
 
@@ -168,7 +171,9 @@ async def collect(req: Request, batch: Batch):
     origin = req.headers.get('origin',''); referer = req.headers.get('referer','')
     if not (allowed_host(origin) or allowed_host(referer)):
         raise HTTPException(status_code=403, detail='Forbidden origin')
-    base_url = base_url_from_headers(origin, referer)
+    host = req.headers.get('x-forwarded-host') or req.headers.get('host')
+    proto = req.headers.get('x-forwarded-proto') or req.url.scheme
+    base_url = base_url_from_headers(origin, referer, host=host, proto=proto)
     ip = get_ip(req); ua = req.headers.get('user-agent','')
     country, region = ip_to_geo(ip) if ip else (None,None)
     device, browser, osfam = ua_to_device(ua)
