@@ -80,10 +80,8 @@
     document.querySelector("#pages tbody").innerHTML = rows
       .map(
         (r) => `
-      <tr>
-        <td data-host="${r.host || ""}" data-path="${r.path || "/"}">${
-          r.display_path || r.path || "/"
-        }</td>
+      <tr data-host="${r.host || ""}" data-path="${r.path || "/"}">
+        <td>${r.display_path || r.path || "/"}</td>
         <td>${r.views}</td>
         <td>${r.udemy_clicks}</td>
         <td>${r.orders}</td>
@@ -211,6 +209,11 @@
         <td>${r.event_name}</td>
         <td>${r.app_id || ""}</td>
         <td>${r.path || ""}</td>
+        <td>${
+          r.page_url
+            ? `<a href="${r.page_url}" target="_blank" rel="noopener">${r.page_url}</a>`
+            : ""
+        }</td>
         <td>${r.button_id || ""}</td>
         <td>${r.target_domain || ""}</td>
         <td>${
@@ -238,10 +241,10 @@
   });
 
   document.querySelector("#pages tbody").addEventListener("dblclick", (e) => {
-    const cell = e.target.closest("td");
-    if (!cell) return;
-    const path = cell.dataset.path || cell.textContent;
-    const host = cell.dataset.host || "";
+    const tr = e.target.closest("tr");
+    if (!tr) return;
+    const path = tr.dataset.path || "/";
+    const host = tr.dataset.host || "";
     loadPageDetails(path, host);
   });
 

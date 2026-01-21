@@ -287,17 +287,18 @@ def metrics_coupons(start: Optional[str] = None, end: Optional[str] = None):
     return {'range':{'start':s,'end':e},'rows':out_rows}
 
 @app.get('/api/metrics/top_pages')
-def metrics_top_pages(start: Optional[str] = None, end: Optional[str] = None, limit: int = 50):
+def metrics_top_pages(start: Optional[str] = None, end: Optional[str] = None, limit: int = 50, include_unknown: bool = False):
     s, e = parse_range(start, end)
     cur = conn.cursor()
     clause, params = ip_filter_clause()
+    host_clause = "" if include_unknown else " AND props_page_host(props_json) != ''"
     cur.execute(
         f"""
         SELECT COALESCE(props_page_host(props_json),'') AS host,
                path,
                COUNT(*) AS views
         FROM events_raw
-        WHERE event_name='page_view' AND ts BETWEEN ? AND ?{clause}
+        WHERE event_name='page_view' AND ts BETWEEN ? AND ?{clause}{host_clause}
         GROUP BY host, path
         ORDER BY views DESC
         LIMIT ?
