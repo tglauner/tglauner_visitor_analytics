@@ -302,3 +302,10 @@ If you don't need labels, you can shorten the file to a plain array of IPs:
 Changes are picked up automatically—no FastAPI restart is required. If you want to store the
 file elsewhere (for example under `/var/www/html/visitor_analytics/config/`), set the
 `REPORTING_FILTERS_PATH` environment variable in the `visitor-collector` service definition.
+
+## 7.0 Misc
+To remove or add local filtering run the following:
+```bash
+printf '[]\n' > /var/www/html/visitor_analytics/collector/config/reporting_filters.json
+printf '[\"173.56.210.195\"]\n' > /var/www/html/visitor_analytics/collector/config/reporting_filters.json
+```
