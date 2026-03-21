@@ -8,7 +8,7 @@ It documents **DigitalOcean + Apache deployment** and the exact **HTML modificat
 
 # Visitor Analytics Platform
 
-This project provides a **self-hosted visitor analytics dashboard** for `tglauner.com` and its course landing pages.
+This project provides a **self-hosted visitor analytics dashboard** for `tglauner.com`, `openclaw.tglauner.com`, and the related course landing pages.
 It captures outbound clicks (e.g. Udemy coupons), page views, and user interactions, and displays metrics in a consolidated dashboard.
 
 ---
@@ -21,6 +21,7 @@ It captures outbound clicks (e.g. Udemy coupons), page views, and user interacti
 * **Web server**: Apache 2.4 on DigitalOcean droplet (already hosting `tglauner.com`). Apache serves:
 
   * Existing course sites (`/frtb_fundamentals/`, `/mastering_interest_rate_derivatives/`, `/mastering_mbs_and_abs/`, `course-xva-essentials.tglauner.com`, and others)
+  * `openclaw.tglauner.com` via the shared collector on `https://tglauner.com/collect`
   * Visitor dashboard under `/visitor_log/`
   * Reverse proxy from `/api/` → FastAPI collector (port 9000).
 
@@ -203,6 +204,21 @@ events from these apps with a stable identifier, include the helper near the end
 
 The helper sets `window.tgAnalyticsConfig.appId` before loading the shared tracker, so the
 dashboard's detail view can display which app generated each event.
+
+### 3.5. OpenClaw standalone host
+
+`openclaw.tglauner.com` is deployed from a separate repo and posts analytics cross-origin back to
+the shared collector on `tglauner.com`. Add this near the end of the page:
+
+```html
+<script
+  src="https://tglauner.com/visitor_analytics/tracking/apps/openclaw_private_setup.js"
+  defer
+></script>
+```
+
+Label important outbound contact links with stable `data-button-id` values so the dedicated
+OpenClaw dashboard section can break out email and phone CTA performance cleanly.
 
 ---
 

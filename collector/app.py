@@ -1,4 +1,4 @@
-import os, json, sqlite3, threading, datetime
+import os, json, sqlite3, threading, datetime, re
 from urllib.parse import urlparse
 from fastapi import FastAPI, Request, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
@@ -51,6 +51,25 @@ def normalize_domain(value: Optional[str]) -> Optional[str]:
         return host or None
     except Exception:
         return None
+
+
+def cors_origin_regex() -> str:
+    patterns: List[str] = []
+    for raw_host in ALLOWED_ORIGINS:
+        host = normalize_domain(raw_host) or raw_host.strip().lower()
+        if not host:
+            continue
+        if host in ('localhost', '127.0.0.1'):
+            patterns.append(re.escape(host))
+        else:
+            patterns.append(r'(?:[a-z0-9-]+\.)*' + re.escape(host))
+    if not patterns:
+        return r'^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$'
+    unique_patterns = list(dict.fromkeys(patterns))
+    return r'^https?://(?:' + '|'.join(unique_patterns) + r')(?::\d+)?$'
+
+
+CORS_ORIGIN_REGEX = cors_origin_regex()
 def base_url_from_headers(origin: str, referer: str, host: Optional[str] = None, proto: Optional[str] = None) -> Optional[str]:
     for candidate in (origin, referer):
         if not candidate:
@@ -112,10 +131,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5174", "http://127.0.0.1:5174",
-        "http://localhost", "http://127.0.0.1"
-    ],
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -123,7 +139,7 @@ app.add_middleware(
 class Event(BaseModel):
     ts: str; uid: str; session_id: str; event_name: str
     path: Optional[str] = None; title: Optional[str] = None; referrer: Optional[str] = None
-    href: Optional[str] = None; target_domain: Optional[str] = None; button_id: Optional[str] = None; course_slug: Optional[str] = None; coupon: Optional[str] = None
+    href: Optional[str] = None; target_domain: Optional[str] = None; target_type: Optional[str] = None; button_id: Optional[str] = None; course_slug: Optional[str] = None; coupon: Optional[str] = None
     utm_source: Optional[str] = None; utm_medium: Optional[str] = None; utm_campaign: Optional[str] = None
     viewport: Optional[Dict[str, Any]] = None; percent: Optional[int] = None
     time_on_page_ms: Optional[int] = None; app_id: Optional[str] = None
@@ -166,6 +182,17 @@ def parse_range(start: Optional[str], end: Optional[str]):
         end_dt = datetime.datetime.fromisoformat(end); start_dt = datetime.datetime.fromisoformat(start)
     return start_dt.isoformat(), end_dt.isoformat()
 
+
+def normalized_page_host(host: Optional[str], *, required: bool = False) -> Optional[str]:
+    if host is None:
+        if required:
+            raise HTTPException(status_code=400, detail='host is required')
+        return None
+    normalized = normalize_domain(host)
+    if not normalized:
+        raise HTTPException(status_code=400, detail='Invalid host')
+    return normalized
+
 @app.post('/collect')
 async def collect(req: Request, batch: Batch):
     origin = req.headers.get('origin',''); referer = req.headers.get('referer','')
@@ -207,6 +234,7 @@ async def collect(req: Request, batch: Batch):
                 'viewport': e.viewport,
                 'percent': e.percent,
                 'target_domain': e.target_domain,
+                'target_type': e.target_type,
                 'app_id': e.app_id,
                 'page_url': page_url,
             }),
@@ -407,6 +435,134 @@ def metrics_locations(start: Optional[str] = None, end: Optional[str] = None):
     )
     rows=[dict(r) for r in cur.fetchall()]
     return {'range':{'start':s,'end':e},'rows':rows}
+
+
+@app.get('/api/metrics/site_snapshot')
+def metrics_site_snapshot(host: str, start: Optional[str] = None, end: Optional[str] = None, path_limit: int = 8, cta_limit: int = 8):
+    s, e = parse_range(start, end)
+    target_host = normalized_page_host(host, required=True)
+    cur = conn.cursor()
+    clause, ip_params = ip_filter_clause()
+    params = (s, e, *ip_params, target_host)
+    host_clause = " AND props_page_host(props_json) = ?"
+
+    cur.execute(
+        f"SELECT COUNT(DISTINCT uid) AS visitors FROM events_raw WHERE ts BETWEEN ? AND ?{clause}{host_clause}",
+        params,
+    )
+    row = cur.fetchone()
+    visitors = int(row['visitors'] or 0) if row else 0
+
+    cur.execute(
+        f"SELECT COUNT(DISTINCT session_id) AS sessions FROM events_raw WHERE ts BETWEEN ? AND ?{clause}{host_clause}",
+        params,
+    )
+    row = cur.fetchone()
+    sessions = int(row['sessions'] or 0) if row else 0
+
+    cur.execute(
+        f"SELECT COUNT(*) AS page_views FROM events_raw WHERE event_name='page_view' AND ts BETWEEN ? AND ?{clause}{host_clause}",
+        params,
+    )
+    row = cur.fetchone()
+    page_views = int(row['page_views'] or 0) if row else 0
+
+    cur.execute(
+        f"SELECT COUNT(*) AS outbound_clicks FROM events_raw WHERE event_name='outbound_click' AND ts BETWEEN ? AND ?{clause}{host_clause}",
+        params,
+    )
+    row = cur.fetchone()
+    outbound_clicks = int(row['outbound_clicks'] or 0) if row else 0
+
+    cur.execute(
+        f"""
+        SELECT COUNT(*) AS email_clicks
+        FROM events_raw
+        WHERE event_name='outbound_click'
+          AND ts BETWEEN ? AND ?{clause}{host_clause}
+          AND COALESCE(json_extract(props_json, '$.href'), '') LIKE 'mailto:%'
+        """,
+        params,
+    )
+    row = cur.fetchone()
+    email_clicks = int(row['email_clicks'] or 0) if row else 0
+
+    cur.execute(
+        f"""
+        SELECT COUNT(*) AS phone_clicks
+        FROM events_raw
+        WHERE event_name='outbound_click'
+          AND ts BETWEEN ? AND ?{clause}{host_clause}
+          AND COALESCE(json_extract(props_json, '$.href'), '') LIKE 'tel:%'
+        """,
+        params,
+    )
+    row = cur.fetchone()
+    phone_clicks = int(row['phone_clicks'] or 0) if row else 0
+
+    cur.execute(
+        f"""
+        SELECT COUNT(*) AS sms_clicks
+        FROM events_raw
+        WHERE event_name='outbound_click'
+          AND ts BETWEEN ? AND ?{clause}{host_clause}
+          AND COALESCE(json_extract(props_json, '$.href'), '') LIKE 'sms:%'
+        """,
+        params,
+    )
+    row = cur.fetchone()
+    sms_clicks = int(row['sms_clicks'] or 0) if row else 0
+
+    cur.execute(
+        f"""
+        SELECT COALESCE(path, '/') AS path,
+               SUM(CASE WHEN event_name='page_view' THEN 1 ELSE 0 END) AS views,
+               COUNT(DISTINCT CASE WHEN event_name='page_view' THEN uid END) AS visitors,
+               SUM(CASE WHEN event_name='outbound_click' THEN 1 ELSE 0 END) AS outbound_clicks
+        FROM events_raw
+        WHERE event_name IN ('page_view', 'outbound_click')
+          AND ts BETWEEN ? AND ?{clause}{host_clause}
+        GROUP BY path
+        HAVING views > 0 OR outbound_clicks > 0
+        ORDER BY views DESC, outbound_clicks DESC, path ASC
+        LIMIT ?
+        """,
+        (*params, path_limit),
+    )
+    top_paths = [dict(r) for r in cur.fetchall()]
+
+    cur.execute(
+        f"""
+        SELECT COALESCE(button_id, '(unlabeled)') AS button_id,
+               COALESCE(json_extract(props_json, '$.href'), '') AS href,
+               COALESCE(json_extract(props_json, '$.target_domain'), '') AS target_domain,
+               COALESCE(json_extract(props_json, '$.target_type'), '') AS target_type,
+               COUNT(*) AS clicks,
+               COUNT(DISTINCT uid) AS visitors
+        FROM events_raw
+        WHERE event_name='outbound_click'
+          AND ts BETWEEN ? AND ?{clause}{host_clause}
+        GROUP BY button_id, href, target_domain, target_type
+        ORDER BY clicks DESC, visitors DESC, button_id ASC
+        LIMIT ?
+        """,
+        (*params, cta_limit),
+    )
+    ctas = [dict(r) for r in cur.fetchall()]
+
+    return {
+        'range': {'start': s, 'end': e},
+        'host': target_host,
+        'visitors': visitors,
+        'sessions': sessions,
+        'page_views': page_views,
+        'outbound_clicks': outbound_clicks,
+        'email_clicks': email_clicks,
+        'phone_clicks': phone_clicks,
+        'sms_clicks': sms_clicks,
+        'top_paths': top_paths,
+        'ctas': ctas,
+    }
 
 def _domain_click_metrics(domain: str, start: str, end: str):
     cur = conn.cursor()

@@ -19,7 +19,57 @@
         ><span id="importStatus"></span>
       </div>
     </header>
-    <section class="tiles" id="tiles"></section>
+    <section class="site-panel">
+      <div class="site-panel-shell">
+        <div class="site-panel-header">
+          <div>
+            <h2>OpenClaw Site Snapshot</h2>
+            <p class="muted">
+              Standalone metrics for <strong>openclaw.tglauner.com</strong>
+            </p>
+          </div>
+          <span class="site-badge">Site-only view</span>
+        </div>
+        <div class="tiles site-tiles" id="openclawTiles"></div>
+        <div class="two-col site-panel-grid">
+          <div>
+            <h3>Top OpenClaw Pages</h3>
+            <table id="openclawPages">
+              <thead>
+                <tr>
+                  <th>Path</th>
+                  <th>Views</th>
+                  <th>Visitors</th>
+                  <th>CTA Clicks</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div>
+            <h3>OpenClaw CTA Clicks</h3>
+            <table id="openclawCtas">
+              <thead>
+                <tr>
+                  <th>CTA</th>
+                  <th>Type</th>
+                  <th>Clicks</th>
+                  <th>Visitors</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="summary-section">
+      <div class="section-heading">
+        <h2>All Tracked Sites</h2>
+        <p class="muted">Global summary across the full analytics stack</p>
+      </div>
+      <div class="tiles" id="tiles"></div>
+    </section>
     <section>
       <h2>Top Pages</h2>
       <table id="pages">

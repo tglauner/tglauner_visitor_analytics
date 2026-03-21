@@ -1,5 +1,6 @@
 (async function () {
   const $ = (q) => document.querySelector(q);
+  const OPENCLAW_HOST = "openclaw.tglauner.com";
 
   // Use the local API when serving the dashboard on port 5174
   const API_BASE =
@@ -29,25 +30,100 @@
     });
   }
 
-  function qs() {
+  function rangeParams() {
+    const p = new URLSearchParams();
     const start = $("#start").value
       ? new Date($("#start").value).toISOString()
       : "";
     const end = $("#end").value ? new Date($("#end").value).toISOString() : "";
-    const p = new URLSearchParams();
     if (start) p.set("start", start);
     if (end) p.set("end", end);
-    return p.toString() ? "?" + p.toString() : "";
+    return p;
   }
 
-  async function fetchJSON(path, opts = {}) {
-    const r = await fetch(API_BASE + path + qs(), opts);
+  function withRange(path, extraParams = {}) {
+    const url = new URL(path, location.origin);
+    const params = new URLSearchParams(url.search);
+    for (const [key, value] of rangeParams().entries()) {
+      params.set(key, value);
+    }
+    Object.entries(extraParams).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== "") {
+        params.set(key, value);
+      }
+    });
+    const query = params.toString();
+    return `${url.pathname}${query ? `?${query}` : ""}`;
+  }
+
+  async function fetchJSON(path, opts = {}, extraParams = {}) {
+    const r = await fetch(API_BASE + withRange(path, extraParams), opts);
     if (!r.ok) throw new Error(await r.text());
     return r.json();
   }
 
   function emptyRow(colspan, message = "No data yet") {
     return `<tr><td colspan="${colspan}" class="empty">${message}</td></tr>`;
+  }
+
+  function renderTiles(container, tiles) {
+    container.innerHTML = tiles
+      .map(
+        ([label, value]) =>
+          `<div class="tile"><div class="label">${label}</div><div class="value">${value}</div></div>`
+      )
+      .join("");
+  }
+
+  function inferCtaType(row) {
+    if (row.target_type) return row.target_type;
+    const href = row.href || "";
+    if (href.startsWith("mailto:")) return "email";
+    if (href.startsWith("tel:")) return "phone";
+    if (href.startsWith("sms:")) return "sms";
+    return row.target_domain || "external";
+  }
+
+  async function loadOpenClawSnapshot() {
+    const d = await fetchJSON("/api/metrics/site_snapshot", {}, { host: OPENCLAW_HOST });
+    renderTiles(document.getElementById("openclawTiles"), [
+      ["Visitors", d.visitors || 0],
+      ["Sessions", d.sessions || 0],
+      ["Page Views", d.page_views || 0],
+      ["CTA Clicks", d.outbound_clicks || 0],
+      ["Email Clicks", d.email_clicks || 0],
+      ["Phone Clicks", d.phone_clicks || 0],
+    ]);
+
+    const pageRows = d.top_paths || [];
+    document.querySelector("#openclawPages tbody").innerHTML = pageRows.length
+      ? pageRows
+          .map(
+            (r) => `
+      <tr>
+        <td>${r.path || "/"}</td>
+        <td>${r.views || 0}</td>
+        <td>${r.visitors || 0}</td>
+        <td>${r.outbound_clicks || 0}</td>
+      </tr>`
+          )
+          .join("")
+      : emptyRow(4, "No OpenClaw traffic in this range yet");
+
+    const ctaRows = d.ctas || [];
+    document.querySelector("#openclawCtas tbody").innerHTML = ctaRows.length
+      ? ctaRows
+          .map(
+            (r) => `
+      <tr>
+        <td>${r.button_id || r.href || "(unlabeled)"}</td>
+        <td>${inferCtaType(r)}</td>
+        <td>${r.clicks || 0}</td>
+        <td>${r.visitors || 0}</td>
+      </tr>`
+          )
+          .join("")
+      : emptyRow(4, "No OpenClaw CTA clicks in this range yet");
   }
 
   async function loadSummary() {
@@ -66,12 +142,7 @@
       ["Net Revenue", `$${(+s.net_revenue).toFixed(2)}`],
       ["CR %", `${(+s.click_to_order_cr_pct).toFixed(2)}%`],
     );
-    $("#tiles").innerHTML = tiles
-      .map(
-        ([l, v]) =>
-          `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div></div>`
-      )
-      .join("");
+    renderTiles($("#tiles"), tiles);
   }
 
   async function loadPages() {
@@ -189,12 +260,12 @@
   }
 
   async function loadPageDetails(path, host) {
-    const q = qs();
-    const hostParam = host ? `&host=${encodeURIComponent(host)}` : "";
-    const url = `/api/metrics/page_details?path=${encodeURIComponent(path)}${hostParam}${q ? "&" + q.slice(1) : ""}`;
-    const r = await fetch(API_BASE + url);
-    if (!r.ok) return;
-    const d = await r.json();
+    let d;
+    try {
+      d = await fetchJSON("/api/metrics/page_details", {}, { path, host });
+    } catch (err) {
+      return;
+    }
     const rows = d.rows || [];
     document.querySelector("#detailPath").textContent = host
       ? `https://${host}${path}`
@@ -250,6 +321,7 @@
 
   async function refreshAll() {
     await Promise.all([
+      loadOpenClawSnapshot(),
       loadSummary(),
       loadPages(),
       loadCoupons(),

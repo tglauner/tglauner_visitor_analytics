@@ -84,6 +84,10 @@ h1 {
   padding: 16px 20px;
 }
 
+.summary-section .tiles {
+  padding: 12px 0 0;
+}
+
 .tile {
   background: var(--card);
   border: 1px solid #223;
@@ -104,6 +108,61 @@ h1 {
 
 section {
   padding: 10px 20px 20px;
+}
+
+.site-panel {
+  padding-top: 18px;
+}
+
+.site-panel-shell {
+  background:
+    radial-gradient(circle at top right, rgba(74, 163, 255, 0.16), transparent 42%),
+    linear-gradient(180deg, rgba(19, 27, 38, 0.98), rgba(13, 18, 27, 0.98));
+  border: 1px solid #27405d;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+}
+
+.site-panel-header,
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.site-panel-header h2,
+.section-heading h2 {
+  margin: 0;
+}
+
+.site-panel-header .muted strong {
+  color: #d9ecff;
+}
+
+.site-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #3b5f86;
+  background: rgba(74, 163, 255, 0.12);
+  color: #d2e8ff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.site-tiles {
+  padding: 14px 0 18px;
+}
+
+.site-panel-grid > div {
+  background: rgba(12, 17, 25, 0.72);
+  border: 1px solid #22384f;
+  border-radius: 12px;
+  padding: 12px;
 }
 
 h2 {
@@ -155,6 +214,11 @@ td.empty {
 @media (max-width: 900px) {
   .two-col {
     grid-template-columns: 1fr;
+  }
+
+  .site-panel-header,
+  .section-heading {
+    flex-direction: column;
   }
 }
 
@@ -231,4 +295,3 @@ footer {
 #detailTable td {
   padding: 4px 12px;
 }
-

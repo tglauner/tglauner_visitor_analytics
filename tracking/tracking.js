@@ -3,11 +3,12 @@
   if (navigator.doNotTrack === "1") return;
   if (window.__tg_analytics_loaded__) return;
   window.__tg_analytics_loaded__ = true;
+  const DEFAULT_COLLECTOR =
+    location.hostname === "localhost" || location.hostname.startsWith("127.")
+      ? "http://127.0.0.1:9000/collect"
+      : "/collect";
   const C = {
-    collector:
-      location.hostname === "localhost" || location.hostname.startsWith("127.")
-        ? "http://127.0.0.1:9000/collect"
-        : "/collect",
+    collector: DEFAULT_COLLECTOR,
     batchSize: 20,
     flushMs: 5000,
     sessionTimeout: 1800000,
@@ -87,6 +88,17 @@
     }
   }
 
+  function cleanCollector(value) {
+    if (value === null || typeof value === "undefined") return null;
+    try {
+      const text = String(value).trim();
+      if (!text) return null;
+      return new URL(text, location.origin).toString();
+    } catch (err) {
+      return null;
+    }
+  }
+
   let rawXva;
   if (typeof window.__tgXvaDomain__ !== "undefined") {
     rawXva = window.__tgXvaDomain__;
@@ -100,6 +112,17 @@
   const XVA_DOMAIN = normalizeDomain(
     rawXva === undefined ? DEFAULT_XVA : rawXva,
   );
+
+  let rawCollector = null;
+  if (typeof window.__tgAnalyticsCollector__ !== "undefined") {
+    rawCollector = window.__tgAnalyticsCollector__;
+  } else if (
+    window.tgAnalyticsConfig &&
+    Object.prototype.hasOwnProperty.call(window.tgAnalyticsConfig, "collector")
+  ) {
+    rawCollector = window.tgAnalyticsConfig.collector;
+  }
+  C.collector = cleanCollector(rawCollector) || DEFAULT_COLLECTOR;
 
   let rawAppId = null;
   if (typeof window.__tgAnalyticsAppId__ !== "undefined") {
@@ -115,8 +138,19 @@
   function parseTrackedLink(h) {
     try {
       const uo = new URL(h, location.origin);
+      const protocol = (uo.protocol || "").toLowerCase();
+      if (protocol === "mailto:" || protocol === "tel:" || protocol === "sms:") {
+        return { target_type: protocol.slice(0, -1) };
+      }
+      if (protocol !== "http:" && protocol !== "https:") {
+        return null;
+      }
       const host = (uo.hostname || "").toLowerCase();
       const normalized = host.replace(/^www\./, "");
+      const currentHost = normalizeDomain(location.hostname);
+      if (!normalized || (currentHost && normalized === currentHost)) {
+        return null;
+      }
       if (/udemy\.com$/.test(normalized)) {
         const m = uo.pathname.match(/\/course\/([^\/]+)\//);
         const cs = m ? m[1] : null;
@@ -124,11 +158,17 @@
           uo.searchParams.get("couponCode") ||
           uo.searchParams.get("coupon") ||
           null;
-        return { course_slug: cs, coupon: cpn, target_domain: normalized };
+        return {
+          course_slug: cs,
+          coupon: cpn,
+          target_domain: normalized,
+          target_type: "udemy",
+        };
       }
       if (XVA_DOMAIN && normalized === XVA_DOMAIN) {
-        return { target_domain: normalized };
+        return { target_domain: normalized, target_type: "xva" };
       }
+      return { target_domain: normalized, target_type: "external" };
     } catch (e) {}
     return null;
   }
@@ -227,6 +267,7 @@
         path: currentPath(),
         href: a.href,
         target_domain: out.target_domain || null,
+        target_type: out.target_type || null,
         button_id: id,
         course_slug: out.course_slug,
         coupon: out.coupon,
@@ -250,6 +291,12 @@
     setSampleRate: (p) => (C.sampleRate = p),
     setAppId: (id) => {
       C.appId = cleanAppId(id);
+    },
+    setCollector: (collector) => {
+      const nextCollector = cleanCollector(collector);
+      if (nextCollector) {
+        C.collector = nextCollector;
+      }
     },
   };
 })();
