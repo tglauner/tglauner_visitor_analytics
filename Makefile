@@ -9,3 +9,9 @@ dev:
 
 migrate:
 	sqlite3 $(DB_PATH) < collector/migrations/001_init.sql
+
+deploy-prod:
+	./scripts/deploy_from_mac.sh
+
+deploy-prod-bootstrap:
+	./scripts/deploy_from_mac.sh --bootstrap

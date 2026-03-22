@@ -1,3 +1,31 @@
+## From your Mac
+
+Normal redeploy:
+
+```bash
+cd /path/to/visitor_analytics
+./scripts/deploy_from_mac.sh
+```
+
+First-time install on the droplet:
+
+```bash
+cd /path/to/visitor_analytics
+./scripts/deploy_from_mac.sh --bootstrap
+```
+
+Equivalent `make` targets:
+
+```bash
+make deploy-prod
+make deploy-prod-bootstrap
+```
+
+The script syncs code with `rsync`, keeps the production DB, `.env`, `geo/`, and remote `.venv`
+in place, restarts `visitor-collector`, reloads Apache, and runs basic health checks.
+
+## Manual steps
+
 1) Install the systemd unit and start the collector:
 
 ```

@@ -29,6 +29,29 @@ It captures outbound clicks (e.g. Udemy coupons), page views, and user interacti
 
 ## 2. Production Installation (DigitalOcean + Apache)
 
+### 2.0. Deploy from your Mac
+
+For routine production deploys from macOS, run:
+
+```bash
+cd /path/to/visitor_analytics
+./scripts/deploy_from_mac.sh
+```
+
+For first-time setup on the droplet:
+
+```bash
+cd /path/to/visitor_analytics
+./scripts/deploy_from_mac.sh --bootstrap
+```
+
+Or use the included make targets:
+
+```bash
+make deploy-prod
+make deploy-prod-bootstrap
+```
+
 ### 2.1. Install requirements
 
 App lives in /var/www/html/visitor_analytics on droplet
