@@ -147,6 +147,19 @@ class Event(BaseModel):
 class Batch(BaseModel):
     events: List[Event] = Field(default_factory=list)
 
+
+def parse_batch_payload(raw_body: bytes) -> Batch:
+    if not raw_body:
+        return Batch()
+    try:
+        payload = json.loads(raw_body.decode('utf-8'))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail='Invalid payload') from exc
+    try:
+        return Batch.model_validate(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail='Invalid batch') from exc
+
 def allowed_host(url: Optional[str]) -> bool:
     if not url: return False
     try:
@@ -194,10 +207,11 @@ def normalized_page_host(host: Optional[str], *, required: bool = False) -> Opti
     return normalized
 
 @app.post('/collect')
-async def collect(req: Request, batch: Batch):
+async def collect(req: Request):
     origin = req.headers.get('origin',''); referer = req.headers.get('referer','')
     if not (allowed_host(origin) or allowed_host(referer)):
         raise HTTPException(status_code=403, detail='Forbidden origin')
+    batch = parse_batch_payload(await req.body())
     host = req.headers.get('x-forwarded-host') or req.headers.get('host')
     proto = req.headers.get('x-forwarded-proto') or req.url.scheme
     base_url = base_url_from_headers(origin, referer, host=host, proto=proto)

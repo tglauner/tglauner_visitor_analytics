@@ -191,20 +191,18 @@
   async function fl() {
     if (!Q.length) return;
     const b = Q.splice(0, Q.length);
+    const payload = JSON.stringify({ events: b });
     try {
       if (navigator.sendBeacon) {
-        const blob = new Blob([JSON.stringify({ events: b })], {
-          type: "application/json",
-        });
-        navigator.sendBeacon(C.collector, blob);
-      } else {
-        await fetch(C.collector, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ events: b }),
-          keepalive: true,
-        });
+        // Plain string payload keeps unload beacons as simple CORS requests.
+        if (navigator.sendBeacon(C.collector, payload)) return;
       }
+      await fetch(C.collector, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        keepalive: true,
+      });
     } catch (e) {}
   }
   setInterval(fl, C.flushMs);
