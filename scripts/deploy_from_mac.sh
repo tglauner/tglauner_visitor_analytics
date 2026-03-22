@@ -149,7 +149,19 @@ run_ssh "
 if [[ "$SKIP_VALIDATE" -eq 0 ]]; then
   echo "Running validation checks"
   run_ssh "systemctl --no-pager --lines=0 status visitor-collector"
-  run_ssh "curl -fsS http://127.0.0.1:9000/healthz"
+  echo "Waiting for collector health endpoint"
+  run_ssh '
+    for attempt in $(seq 1 20); do
+      if curl -fsS http://127.0.0.1:9000/healthz >/dev/null; then
+        exit 0
+      fi
+      sleep 1
+    done
+    echo "Collector health endpoint did not become ready in time" >&2
+    systemctl --no-pager -l status visitor-collector >&2 || true
+    journalctl -u visitor-collector -n 50 --no-pager >&2 || true
+    exit 1
+  '
   curl -fsSI https://tglauner.com/visitor_log/ >/dev/null
   curl -fsSI https://tglauner.com/visitor_analytics/tracking/apps/openclaw_private_setup.js >/dev/null
   echo "Validation passed"
