@@ -92,7 +92,7 @@ WorkingDirectory=/var/www/html/visitor_analytics
 Environment=PYTHONPATH=/var/www/html/visitor_analytics
 Environment=DATABASE_URL=sqlite:////var/www/html/visitor_analytics/data/analytics.sqlite3
 Environment=MAXMIND_DB=/var/www/html/visitor_analytics/geo/GeoLite2-City.mmdb
-Environment=ALLOWED_ORIGINS=tglauner.com,localhost,127.0.0.1,course-xva-essentials.tglauner.com
+Environment=ALLOWED_ORIGINS=tglauner.com,openclaw.tglauner.com,localhost,127.0.0.1,course-xva-essentials.tglauner.com
 ExecStart=/var/www/html/visitor_analytics/.venv/bin/uvicorn collector.app:app --app-dir /var/www/html/visitor_analytics --host 127.0.0.1 --port 9000 --workers 2
 Restart=always
 

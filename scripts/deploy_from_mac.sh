@@ -13,6 +13,7 @@ REMOTE_SSL_VHOST="${REMOTE_SSL_VHOST:-/etc/apache2/sites-available/tglauner-ssl.
 BOOTSTRAP=0
 SKIP_PIP=0
 SKIP_VALIDATE=0
+SYNC_UNIT=1
 
 usage() {
   cat <<EOF
@@ -24,6 +25,7 @@ Options:
   --bootstrap      First-time install: create dirs, venv, service, DB, Apache wiring
   --skip-pip       Skip remote pip install -r collector/requirements.txt
   --skip-validate  Skip post-deploy health checks
+  --skip-unit-sync Skip syncing deploy/visitor-analytics.service to systemd
   -h, --help       Show this help
 
 Environment overrides:
@@ -51,6 +53,9 @@ while (($#)); do
       ;;
     --skip-validate)
       SKIP_VALIDATE=1
+      ;;
+    --skip-unit-sync)
+      SYNC_UNIT=0
       ;;
     -h|--help)
       usage
@@ -128,6 +133,15 @@ if [[ "$BOOTSTRAP" -eq 1 ]]; then
 
   echo "Ensuring required Apache modules are enabled"
   run_ssh "a2enmod proxy proxy_http headers rewrite >/dev/null 2>&1 || true"
+fi
+
+if [[ "$SYNC_UNIT" -eq 1 && "$BOOTSTRAP" -eq 0 ]]; then
+  echo "Syncing systemd unit"
+  scp "$ROOT_DIR/deploy/visitor-analytics.service" "$DROPLET:/tmp/visitor-analytics.service"
+  run_ssh "
+    mv /tmp/visitor-analytics.service '$REMOTE_SERVICE_PATH' &&
+    systemctl daemon-reload
+  "
 fi
 
 if [[ "$SKIP_PIP" -eq 0 ]]; then
