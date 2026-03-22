@@ -132,8 +132,8 @@ Edit `/etc/apache2/sites-enabled/tglauner-ssl.conf`:
 
 ```apache
 # Serve dashboard under /visitor_log/
-Alias /visitor_log /var/www/html/visitor_log
-<Directory /var/www/html/visitor_log>
+Alias /visitor_log /var/www/html/visitor_analytics/visitor_log
+<Directory /var/www/html/visitor_analytics/visitor_log>
     Options -Indexes +FollowSymLinks
     AllowOverride All
     Require all granted

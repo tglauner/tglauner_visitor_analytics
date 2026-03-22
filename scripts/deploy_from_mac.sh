@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 DROPLET="${DROPLET:-root@45.55.196.120}"
 REMOTE_APP_ROOT="${REMOTE_APP_ROOT:-/var/www/html/visitor_analytics}"
-REMOTE_DASHBOARD_ROOT="${REMOTE_DASHBOARD_ROOT:-/var/www/html/visitor_log}"
+REMOTE_DASHBOARD_ROOT="${REMOTE_DASHBOARD_ROOT:-/var/www/html/visitor_analytics/visitor_log}"
 REMOTE_DB_PATH="${REMOTE_DB_PATH:-$REMOTE_APP_ROOT/data/analytics.sqlite3}"
 REMOTE_SERVICE_PATH="${REMOTE_SERVICE_PATH:-/etc/systemd/system/visitor-collector.service}"
 REMOTE_SSL_VHOST="${REMOTE_SSL_VHOST:-/etc/apache2/sites-available/tglauner-ssl.conf}"
