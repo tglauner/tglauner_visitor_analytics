@@ -36,19 +36,17 @@ DigitalOcean droplet.
 
 ```bash
 cd /path/to/visitor_analytics
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r collector/requirements.txt
+make setup
 ```
 
-### 2. Create a local SQLite database and run migrations
+### 2. Create the local data directory
 
 ```bash
 cd /path/to/visitor_analytics
 mkdir -p data
-sqlite3 data/analytics.sqlite3 < collector/migrations/001_init.sql
-sqlite3 data/analytics.sqlite3 < collector/migrations/002_add_time_on_page.sql
 ```
+
+The collector creates and upgrades the current SQLite schema idempotently when it starts.
 
 ### 3. Start the collector locally
 
@@ -70,6 +68,12 @@ Expected response:
 
 ```json
 {"ok":true}
+```
+
+Run all automated regression tests with:
+
+```bash
+make test
 ```
 
 ### 4. Serve the dashboard locally
@@ -121,10 +125,10 @@ allowed site. It also lets the collector associate this local event with the das
 
 ### Notes
 
-* `make dev` and `scripts/dev.sh` start the FastAPI server, but they do not initialize a local
-  SQLite database for a fresh Mac setup.
+* `make dev` and `scripts/dev.sh` use the root `.venv`; run `make setup` first.
 * GeoIP lookups are optional in local testing. If `MAXMIND_DB` is not set, location fields will
   simply be empty.
+* Production must set `ADMIN_AUTH_ENABLED=true` and non-default admin credentials in `.env`.
 
 ---
 

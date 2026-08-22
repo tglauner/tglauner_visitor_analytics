@@ -1,14 +1,19 @@
 SHELL := /bin/bash
-DB_PATH ?= /var/www/html/visitor_analytics/data/analytics.sqlite3
+PYTHON := .venv/bin/python
+
+setup:
+	python3 -m venv --clear .venv
+	$(PYTHON) -m pip install --upgrade pip
+	$(PYTHON) -m pip install --index-url https://pypi.org/simple -r collector/requirements-dev.txt
 
 dev:
-	cd collector && \
-	python3 -m venv .venv && source .venv/bin/activate && \
-	pip install -r requirements.txt && \
-	uvicorn app:app --host 127.0.0.1 --port 9000 --reload
+	$(PYTHON) -m uvicorn collector.app:app --host 127.0.0.1 --port 9000 --reload
 
-migrate:
-	sqlite3 $(DB_PATH) < collector/migrations/001_init.sql
+test:
+	$(PYTHON) -m pytest -q
+
+smoke:
+	curl -fsS http://127.0.0.1:9000/healthz
 
 deploy-prod:
 	./scripts/deploy_from_mac.sh

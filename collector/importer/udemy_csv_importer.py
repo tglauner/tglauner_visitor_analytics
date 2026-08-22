@@ -1,4 +1,7 @@
-import csv, io, re, datetime
+import csv
+import datetime
+import io
+import re
 
 def _norm(s):
     return (s or '').strip().lower()
@@ -13,7 +16,8 @@ def parse_udemy_csv(bytes_data):
             for n in names:
                 if _norm(n) in keys: return r[keys[_norm(n)]].strip()
             for k in r.keys():
-                if _norm(n) in _norm(k): return r[k].strip()
+                if any(_norm(name) in _norm(k) for name in names):
+                    return (r[k] or '').strip()
             return ''
         order_id = get('Order ID','Order','ID')
         dt_raw   = get('Purchase Date','Time','Order Date','Date')
@@ -27,12 +31,14 @@ def parse_udemy_csv(bytes_data):
             try:
                 iso = datetime.datetime.strptime(dt_raw, fmt).isoformat(); break
             except Exception: pass
-        if not iso: iso = datetime.datetime.utcnow().isoformat()
+        if not iso:
+            continue
         s = (course or '').lower().strip()
         s = re.sub(r'[^a-z0-9]+','-', s).strip('-')
         def f(x):
             x = (x or '').replace(',','').replace('$','').strip()
             try: return float(x)
             except: return 0.0
-        out.append((order_id, iso, s, coupon or '', currency or '', f(gross), f(net)))
+        if order_id:
+            out.append((order_id, iso, s, coupon or '', currency or '', f(gross), f(net)))
     return out

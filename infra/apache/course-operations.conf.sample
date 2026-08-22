@@ -1,0 +1,12 @@
+# Architecture-manager compatibility path; this sample configures Visitor Analytics.
+ProxyPreserveHost On
+ProxyPass /collect http://127.0.0.1:9000/collect
+ProxyPassReverse /collect http://127.0.0.1:9000/collect
+ProxyPass /api/ http://127.0.0.1:9000/api/
+ProxyPassReverse /api/ http://127.0.0.1:9000/api/
+
+Alias /visitor_log/ /var/www/html/visitor_analytics/visitor_log/
+<Directory /var/www/html/visitor_analytics/visitor_log/>
+    Require all granted
+    Options -Indexes
+</Directory>

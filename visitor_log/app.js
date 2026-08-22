@@ -1,6 +1,7 @@
 (async function () {
   const $ = (q) => document.querySelector(q);
   const OPENCLAW_HOST = "openclaw.tglauner.com";
+  let adminCredentials = sessionStorage.getItem("visitorAnalyticsAuth") || "";
 
   // Use the local API when serving the dashboard on port 5174
   const API_BASE =
@@ -57,10 +58,26 @@
   }
 
   async function fetchJSON(path, opts = {}, extraParams = {}) {
-    const r = await fetch(API_BASE + withRange(path, extraParams), opts);
+    const headers = new Headers(opts.headers || {});
+    if (adminCredentials) headers.set("Authorization", `Basic ${adminCredentials}`);
+    const r = await fetch(API_BASE + withRange(path, extraParams), { ...opts, headers });
+    if (r.status === 401) {
+      const status = $("#authStatus");
+      if (status) status.textContent = "Sign in with the configured admin credentials.";
+    }
     if (!r.ok) throw new Error(await r.text());
     return r.json();
   }
+
+  $("#signIn")?.addEventListener("click", () => {
+    const username = $("#adminUser").value;
+    const password = $("#adminPassword").value;
+    adminCredentials = btoa(`${username}:${password}`);
+    sessionStorage.setItem("visitorAnalyticsAuth", adminCredentials);
+    $("#adminPassword").value = "";
+    $("#authStatus").textContent = "Credentials saved for this browser tab.";
+    $("#refresh").click();
+  });
 
   function emptyRow(colspan, message = "No data yet") {
     return `<tr><td colspan="${colspan}" class="empty">${message}</td></tr>`;
@@ -344,11 +361,10 @@
     const fd = new FormData();
     fd.append("file", f);
     try {
-      const r = await fetch(API_BASE + "/api/import/udemy_csv", {
+      const j = await fetchJSON("/api/import/udemy_csv", {
         method: "POST",
         body: fd,
       });
-      const j = await r.json();
       document.getElementById("importStatus").textContent = `Imported ${j.inserted} rows`;
       await refreshAll();
     } catch (err) {

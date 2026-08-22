@@ -78,6 +78,9 @@ echo "Deploy target: $DROPLET"
 echo "Remote app root: $REMOTE_APP_ROOT"
 echo "Remote dashboard root: $REMOTE_DASHBOARD_ROOT"
 
+echo "Running local regression tests"
+"$ROOT_DIR/.venv/bin/python" -m pytest -q "$ROOT_DIR/tests"
+
 if [[ "$BOOTSTRAP" -eq 1 ]]; then
   echo "Bootstrap: creating remote directories and Python venv"
   run_ssh "
@@ -93,6 +96,9 @@ echo "Syncing application code"
 rsync -az --delete \
   --exclude '.git/' \
   --exclude '.venv/' \
+  --exclude '.env' \
+  --exclude 'confidential/' \
+  --exclude 'status/' \
   --exclude '.DS_Store' \
   --exclude 'data/' \
   --exclude 'geo/' \
@@ -148,7 +154,7 @@ if [[ "$SKIP_PIP" -eq 0 ]]; then
   echo "Installing Python requirements on droplet"
   run_ssh "
     cd '$REMOTE_APP_ROOT' &&
-    ./.venv/bin/pip install -r collector/requirements.txt
+    ./.venv/bin/python -m pip install -r collector/requirements.txt
   "
 fi
 

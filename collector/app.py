@@ -1,15 +1,32 @@
-import os, json, sqlite3, threading, datetime, re
-from urllib.parse import urlparse
-from fastapi import FastAPI, Request, UploadFile, File, HTTPException
+import datetime
+import json
+import secrets
+from collections import defaultdict
+from pathlib import Path
+from typing import List, Optional
+
+from fastapi import Depends, FastAPI, Request, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from user_agents import parse as ua_parse
 
 from dotenv import load_dotenv
 load_dotenv()
 
+from collector.config import Settings, sqlite_path
+from collector.database import Database
+from collector.domain import (
+    allowed_host as domain_allowed_host,
+    base_url_from_headers,
+    cors_origin_regex as build_cors_origin_regex,
+    normalize_domain,
+    parse_batch_payload,
+    parse_range,
+    props_value_host,
+)
 from collector.reporting_filters import ReportingFilterLoader
+from collector.schemas import Batch, Event
 
 GEO_READER = None
 try:
@@ -17,16 +34,11 @@ try:
 except Exception:
     GeoReader = None
 
-DB_URL = os.getenv('DATABASE_URL','sqlite:////var/lib/visitor_log/analytics.sqlite3')
-DB_PATH = DB_URL.replace('sqlite:////','/') if DB_URL.startswith('sqlite:////') else DB_URL.replace('sqlite:///','/')
-ALLOWED_ORIGINS = [h.strip().lower() for h in os.getenv('ALLOWED_ORIGINS','tglauner.com,localhost,127.0.0.1').split(',')]
-MAXMIND_DB = os.getenv('MAXMIND_DB','/opt/visitor_log/geo/GeoLite2-City.mmdb')
-REPORTING_FILTERS_PATH = os.getenv(
-    'REPORTING_FILTERS_PATH',
-    os.path.join(os.path.dirname(__file__), 'config', 'reporting_filters.json'),
-)
-
-
+settings = Settings.from_env()
+DB_PATH = sqlite_path(settings.database_url)
+ALLOWED_ORIGINS = settings.allowed_origins
+MAXMIND_DB = settings.maxmind_db
+REPORTING_FILTERS_PATH = settings.reporting_filters_path
 _filters = ReportingFilterLoader(REPORTING_FILTERS_PATH)
 
 
@@ -36,98 +48,30 @@ def excluded_ips() -> List[str]:
 
 def ip_filter_clause(column: str = 'ip'):
     return _filters.sql_fragment(column)
-def normalize_domain(value: Optional[str]) -> Optional[str]:
-    if not value:
-        return None
-    try:
-        text = value.strip()
-        if not text:
-            return None
-        parsed = urlparse(text if '://' in text else f'//{text}', allow_fragments=False)
-        host = parsed.hostname or parsed.path or ''
-        if '/' in host:
-            host = host.split('/')[0]
-        host = host.strip().lower()
-        return host or None
-    except Exception:
-        return None
-
-
 def cors_origin_regex() -> str:
-    patterns: List[str] = []
-    for raw_host in ALLOWED_ORIGINS:
-        host = normalize_domain(raw_host) or raw_host.strip().lower()
-        if not host:
-            continue
-        if host in ('localhost', '127.0.0.1'):
-            patterns.append(re.escape(host))
-        else:
-            patterns.append(r'(?:[a-z0-9-]+\.)*' + re.escape(host))
-    if not patterns:
-        return r'^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$'
-    unique_patterns = list(dict.fromkeys(patterns))
-    return r'^https?://(?:' + '|'.join(unique_patterns) + r')(?::\d+)?$'
+    return build_cors_origin_regex(ALLOWED_ORIGINS)
 
 
 CORS_ORIGIN_REGEX = cors_origin_regex()
-def base_url_from_headers(origin: str, referer: str, host: Optional[str] = None, proto: Optional[str] = None) -> Optional[str]:
-    for candidate in (origin, referer):
-        if not candidate:
-            continue
-        try:
-            parsed = urlparse(candidate)
-            if parsed.scheme and parsed.netloc:
-                return f"{parsed.scheme}://{parsed.netloc}"
-        except Exception:
-            continue
-    if host:
-        scheme = (proto or 'https').strip()
-        return f"{scheme}://{host}"
-    return None
-
-
-
 def props_host_from_json(props_json: Optional[str]) -> str:
-    if not props_json:
-        return ''
-    try:
-        payload = json.loads(props_json)
-    except Exception:
-        return ''
-    domain = payload.get('target_domain')
-    if domain:
-        normalized = normalize_domain(domain)
-        if normalized:
-            return normalized
-    href = payload.get('href')
-    normalized = normalize_domain(href)
-    return normalized or ''
+    return props_value_host(props_json, 'target_domain', 'href')
 
 def props_page_host_from_json(props_json: Optional[str]) -> str:
-    if not props_json:
-        return ''
-    try:
-        payload = json.loads(props_json)
-    except Exception:
-        return ''
-    page_url = payload.get('page_url') or payload.get('href')
-    normalized = normalize_domain(page_url)
-    return normalized or ''
+    return props_value_host(props_json, 'page_url', 'href')
 
 
-XVA_DOMAIN = normalize_domain(os.getenv('XVA_TARGET_DOMAIN', 'course-xva-essentials.tglauner.com'))
-if GeoReader and os.path.exists(MAXMIND_DB):
+XVA_DOMAIN = normalize_domain(settings.xva_target_domain)
+if GeoReader and MAXMIND_DB.exists():
     try: GEO_READER = GeoReader(MAXMIND_DB)
     except Exception: GEO_READER = None
 
-conn = sqlite3.connect(DB_PATH, check_same_thread=False, isolation_level=None)
-conn.row_factory = sqlite3.Row
+database = Database(DB_PATH)
+database.initialize()
+conn = database.connection
 conn.create_function('props_host', 1, props_host_from_json)
 conn.create_function('props_page_host', 1, props_page_host_from_json)
-dblock = threading.Lock()
+dblock = database.lock
 app = FastAPI(title='Visitor Analytics Collector', version='1.0.0')
-
-from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
@@ -136,40 +80,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class Event(BaseModel):
-    ts: str; uid: str; session_id: str; event_name: str
-    path: Optional[str] = None; title: Optional[str] = None; referrer: Optional[str] = None
-    href: Optional[str] = None; target_domain: Optional[str] = None; target_type: Optional[str] = None; button_id: Optional[str] = None; course_slug: Optional[str] = None; coupon: Optional[str] = None
-    utm_source: Optional[str] = None; utm_medium: Optional[str] = None; utm_campaign: Optional[str] = None
-    viewport: Optional[Dict[str, Any]] = None; percent: Optional[int] = None
-    time_on_page_ms: Optional[int] = None; app_id: Optional[str] = None
-    page_url: Optional[str] = None
-class Batch(BaseModel):
-    events: List[Event] = Field(default_factory=list)
+basic_auth = HTTPBasic(auto_error=False)
 
 
-def parse_batch_payload(raw_body: bytes) -> Batch:
-    if not raw_body:
-        return Batch()
-    try:
-        payload = json.loads(raw_body.decode('utf-8'))
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail='Invalid payload') from exc
-    try:
-        return Batch.model_validate(payload)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail='Invalid batch') from exc
+def require_admin(credentials: Optional[HTTPBasicCredentials] = Depends(basic_auth)) -> None:
+    if not settings.admin_auth_enabled:
+        return
+    valid = bool(credentials) and secrets.compare_digest(credentials.username, settings.admin_username)
+    valid = valid and secrets.compare_digest(credentials.password, settings.admin_password)
+    if not valid:
+        raise HTTPException(
+            status_code=401,
+            detail='Authentication required',
+            headers={'WWW-Authenticate': 'Basic'},
+        )
 
 def allowed_host(url: Optional[str]) -> bool:
-    if not url: return False
-    try:
-        u = urlparse(url); host = (u.hostname or '').lower()
-        if host in ('localhost','127.0.0.1'): return True
-        for dom in ALLOWED_ORIGINS:
-            if dom and (host == dom or host.endswith('.'+dom)):
-                return True
-    except Exception: pass
-    return False
+    return domain_allowed_host(url, ALLOWED_ORIGINS)
 
 def get_ip(req: Request):
     xff = req.headers.get('x-forwarded-for')
@@ -187,14 +114,6 @@ def ua_to_device(ua_str: str):
         ua = ua_parse(ua_str or ''); device = 'mobile' if ua.is_mobile else 'tablet' if ua.is_tablet else 'pc'
         return device, ua.browser.family, ua.os.family
     except Exception: return None, None, None
-
-def parse_range(start: Optional[str], end: Optional[str]):
-    if not start or not end:
-        end_dt = datetime.datetime.utcnow(); start_dt = end_dt - datetime.timedelta(days=7)
-    else:
-        end_dt = datetime.datetime.fromisoformat(end); start_dt = datetime.datetime.fromisoformat(start)
-    return start_dt.isoformat(), end_dt.isoformat()
-
 
 def normalized_page_host(host: Optional[str], *, required: bool = False) -> Optional[str]:
     if host is None:
@@ -265,7 +184,7 @@ async def collect(req: Request):
 def healthz():
     return {'ok': True}
 
-@app.get('/api/metrics/summary')
+@app.get('/api/metrics/summary', dependencies=[Depends(require_admin)])
 def metrics_summary(start: Optional[str] = None, end: Optional[str] = None):
     s, e = parse_range(start, end)
     cur = conn.cursor()
@@ -309,7 +228,7 @@ def metrics_summary(start: Optional[str] = None, end: Optional[str] = None):
     cr = (orders/out_clicks*100.0) if out_clicks else 0.0
     return {'range':{'start':s,'end':e},'visitors':visitors,'sessions':sessions,'page_views':page_views,'outbound_clicks':out_clicks,'xva_clicks':xva_clicks,'xva_domain':XVA_DOMAIN,'orders':orders,'net_revenue':round(net,2),'click_to_order_cr_pct':round(cr,2)}
 
-@app.get('/api/metrics/coupons')
+@app.get('/api/metrics/coupons', dependencies=[Depends(require_admin)])
 def metrics_coupons(start: Optional[str] = None, end: Optional[str] = None):
     s, e = parse_range(start, end)
     cur = conn.cursor()
@@ -328,7 +247,7 @@ def metrics_coupons(start: Optional[str] = None, end: Optional[str] = None):
         if key not in seen: out_rows.append({'coupon':key[0],'course_slug':key[1],'clicks':cks,'orders':0,'net':0.0,'cr_pct':0.0})
     return {'range':{'start':s,'end':e},'rows':out_rows}
 
-@app.get('/api/metrics/top_pages')
+@app.get('/api/metrics/top_pages', dependencies=[Depends(require_admin)])
 def metrics_top_pages(start: Optional[str] = None, end: Optional[str] = None, limit: int = 50, include_unknown: bool = False):
     s, e = parse_range(start, end)
     cur = conn.cursor()
@@ -411,7 +330,7 @@ def metrics_top_pages(start: Optional[str] = None, end: Optional[str] = None, li
         rows.append({'host': host, 'path': p, 'display_path': display_path, 'views': v, 'udemy_clicks': cks, 'orders': o['orders'], 'net': round(o['net'],2), 'cr_pct': round(cr,2)})
     return {'range':{'start':s,'end':e},'rows':rows}
 
-@app.get('/api/metrics/page_details')
+@app.get('/api/metrics/page_details', dependencies=[Depends(require_admin)])
 def metrics_page_details(path: str, host: Optional[str] = None, start: Optional[str] = None, end: Optional[str] = None):
     s, e = parse_range(start, end)
     cur = conn.cursor()
@@ -438,7 +357,7 @@ def metrics_page_details(path: str, host: Optional[str] = None, start: Optional[
         rows.append(d)
     return {'range': {'start': s, 'end': e}, 'path': path, 'rows': rows}
 
-@app.get('/api/metrics/locations')
+@app.get('/api/metrics/locations', dependencies=[Depends(require_admin)])
 def metrics_locations(start: Optional[str] = None, end: Optional[str] = None):
     s, e = parse_range(start, end)
     cur = conn.cursor()
@@ -451,7 +370,7 @@ def metrics_locations(start: Optional[str] = None, end: Optional[str] = None):
     return {'range':{'start':s,'end':e},'rows':rows}
 
 
-@app.get('/api/metrics/site_snapshot')
+@app.get('/api/metrics/site_snapshot', dependencies=[Depends(require_admin)])
 def metrics_site_snapshot(host: str, start: Optional[str] = None, end: Optional[str] = None, path_limit: int = 8, cta_limit: int = 8):
     s, e = parse_range(start, end)
     target_host = normalized_page_host(host, required=True)
@@ -631,7 +550,7 @@ def _domain_click_metrics(domain: str, start: str, end: str):
     }
 
 
-@app.get('/api/metrics/xva_clicks')
+@app.get('/api/metrics/xva_clicks', dependencies=[Depends(require_admin)])
 def metrics_xva_clicks(start: Optional[str] = None, end: Optional[str] = None, domain: Optional[str] = None):
     s, e = parse_range(start, end)
     target = normalize_domain(domain) if domain is not None else XVA_DOMAIN
@@ -657,17 +576,24 @@ try:
 except Exception as exc:
     parse_udemy_csv = None
     _UDEMY_IMPORT_ERROR = str(exc)
-@app.post('/api/import/udemy_csv')
+@app.post('/api/import/udemy_csv', dependencies=[Depends(require_admin)])
 async def import_udemy_csv(file: UploadFile = File(...)):
     if not parse_udemy_csv:
         raise HTTPException(
             status_code=503,
             detail=f'Udemy CSV importer unavailable: {_UDEMY_IMPORT_ERROR or "unknown error"}',
         )
-    data = await file.read(); rows = parse_udemy_csv(data); n=0
+    data = await file.read()
+    rows = parse_udemy_csv(data)
+    inserted = 0
     with dblock:
         for (order_id, order_ts, course_slug, coupon, currency, gross, net) in rows:
             try:
-                conn.execute('INSERT OR IGNORE INTO udemy_orders(order_id, order_ts, course_slug, coupon, currency, gross, net) VALUES (?,?,?,?,?,?,?)',(order_id, order_ts, course_slug, coupon, currency, gross, net)); n+=1
-            except Exception: pass
-    return {'ok': True, 'inserted': n}
+                cursor = conn.execute(
+                    'INSERT OR IGNORE INTO udemy_orders(order_id, order_ts, course_slug, coupon, currency, gross, net) VALUES (?,?,?,?,?,?,?)',
+                    (order_id, order_ts, course_slug, coupon, currency, gross, net),
+                )
+                inserted += cursor.rowcount
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail='Could not import CSV row') from exc
+    return {'ok': True, 'inserted': inserted}

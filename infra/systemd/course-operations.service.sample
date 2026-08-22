@@ -1,0 +1,16 @@
+# Architecture-manager compatibility path; this unit runs Visitor Analytics.
+[Unit]
+Description=Visitor Analytics Collector
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/html/visitor_analytics
+EnvironmentFile=-/var/www/html/visitor_analytics/.env
+ExecStart=/var/www/html/visitor_analytics/.venv/bin/python -m uvicorn collector.app:app --host 127.0.0.1 --port 9000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

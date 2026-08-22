@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/status_slide.py\" hook-start",
+            "timeout": 120,
+            "statusMessage": "Opening working status slide"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/status_slide.py\" hook-finish",
+            "timeout": 120,
+            "statusMessage": "Ensuring final status slide"
+          }
+        ]
+      }
+    ]
+  }
+}
