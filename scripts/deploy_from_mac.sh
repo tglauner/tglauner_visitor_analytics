@@ -96,6 +96,7 @@ echo "Syncing application code"
 rsync -az --delete \
   --exclude '.git/' \
   --exclude '.venv/' \
+  --exclude '.venv-old/' \
   --exclude '.env' \
   --exclude 'confidential/' \
   --exclude 'status/' \
