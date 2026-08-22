@@ -93,7 +93,7 @@ if [[ "$BOOTSTRAP" -eq 1 ]]; then
 fi
 
 echo "Syncing application code"
-rsync -rzlt --delete --chmod=D755,F644 \
+rsync -rzlt --delete \
   --exclude '.git/' \
   --exclude '.venv/' \
   --exclude '.venv-old/' \
@@ -113,9 +113,25 @@ rsync -rzlt --delete --chmod=D755,F644 \
   "$ROOT_DIR/" "$DROPLET:$REMOTE_APP_ROOT/"
 
 echo "Syncing dashboard assets"
-rsync -rzlt --delete --chmod=D755,F644 \
+rsync -rzlt --delete \
   --exclude '.DS_Store' \
   "$ROOT_DIR/visitor_log/" "$DROPLET:$REMOTE_DASHBOARD_ROOT/"
+
+echo "Normalizing deployed code permissions"
+run_ssh "
+  chmod 755 '$REMOTE_APP_ROOT' &&
+  find '$REMOTE_APP_ROOT' -mindepth 1 \\
+    \( -path '$REMOTE_APP_ROOT/.venv' -o -path '$REMOTE_APP_ROOT/.venv/*' \\
+       -o -path '$REMOTE_APP_ROOT/.venv-old' -o -path '$REMOTE_APP_ROOT/.venv-old/*' \\
+       -o -path '$REMOTE_APP_ROOT/.env' \\
+       -o -path '$REMOTE_APP_ROOT/confidential' -o -path '$REMOTE_APP_ROOT/confidential/*' \\
+       -o -path '$REMOTE_APP_ROOT/status' -o -path '$REMOTE_APP_ROOT/status/*' \\
+       -o -path '$REMOTE_APP_ROOT/data' -o -path '$REMOTE_APP_ROOT/data/*' \\
+       -o -path '$REMOTE_APP_ROOT/geo' -o -path '$REMOTE_APP_ROOT/geo/*' \) -prune \\
+    -o -type d -exec chmod 755 {} + \\
+    -o -type f -exec chmod 644 {} + &&
+  chmod 755 '$REMOTE_APP_ROOT'/scripts/*.sh '$REMOTE_APP_ROOT'/scripts/*.py
+"
 
 echo "Verifying production file access"
 run_ssh "
