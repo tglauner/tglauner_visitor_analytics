@@ -93,7 +93,7 @@ if [[ "$BOOTSTRAP" -eq 1 ]]; then
 fi
 
 echo "Syncing application code"
-rsync -az --delete \
+rsync -rzlt --delete --chmod=D755,F644 \
   --exclude '.git/' \
   --exclude '.venv/' \
   --exclude '.venv-old/' \
@@ -113,9 +113,18 @@ rsync -az --delete \
   "$ROOT_DIR/" "$DROPLET:$REMOTE_APP_ROOT/"
 
 echo "Syncing dashboard assets"
-rsync -az --delete \
+rsync -rzlt --delete --chmod=D755,F644 \
   --exclude '.DS_Store' \
   "$ROOT_DIR/visitor_log/" "$DROPLET:$REMOTE_DASHBOARD_ROOT/"
+
+echo "Verifying production file access"
+run_ssh "
+  test -r '$REMOTE_APP_ROOT/collector/app.py' &&
+  test -r '$REMOTE_DASHBOARD_ROOT/index.html' &&
+  runuser -u www-data -- test -x '$REMOTE_APP_ROOT' &&
+  runuser -u www-data -- test -r '$REMOTE_APP_ROOT/collector/app.py' &&
+  runuser -u www-data -- test -r '$REMOTE_DASHBOARD_ROOT/index.html'
+"
 
 if [[ "$BOOTSTRAP" -eq 1 ]]; then
   echo "Installing systemd unit"
