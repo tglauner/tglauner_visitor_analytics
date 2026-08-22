@@ -27,6 +27,107 @@ It captures outbound clicks (e.g. Udemy coupons), page views, and user interacti
 
 ---
 
+## Local Testing on macOS (Mac Mini)
+
+Use this flow when you want to run the collector and dashboard locally on your Mac without touching the
+DigitalOcean droplet.
+
+### 1. Create a local virtualenv and install dependencies
+
+```bash
+cd /path/to/visitor_analytics
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r collector/requirements.txt
+```
+
+### 2. Create a local SQLite database and run migrations
+
+```bash
+cd /path/to/visitor_analytics
+mkdir -p data
+sqlite3 data/analytics.sqlite3 < collector/migrations/001_init.sql
+sqlite3 data/analytics.sqlite3 < collector/migrations/002_add_time_on_page.sql
+```
+
+### 3. Start the collector locally
+
+```bash
+cd /path/to/visitor_analytics
+source .venv/bin/activate
+export DATABASE_URL="sqlite:///$PWD/data/analytics.sqlite3"
+export ALLOWED_ORIGINS="localhost,127.0.0.1,tglauner.com,openclaw.tglauner.com,course-xva-essentials.tglauner.com"
+uvicorn collector.app:app --app-dir . --host 127.0.0.1 --port 9000 --reload
+```
+
+Smoke-check the API in another terminal:
+
+```bash
+curl -fsS http://127.0.0.1:9000/healthz
+```
+
+Expected response:
+
+```json
+{"ok":true}
+```
+
+### 4. Serve the dashboard locally
+
+In a second terminal:
+
+```bash
+cd /path/to/visitor_analytics/visitor_log
+python3 -m http.server 5174
+```
+
+Open:
+
+```text
+http://localhost:5174
+```
+
+The dashboard JS is already wired to use `http://127.0.0.1:9000` when it is served from
+`localhost:5174`.
+
+### 5. Send a test event
+
+In a third terminal:
+
+```bash
+curl -fsS http://127.0.0.1:9000/collect \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: http://localhost:5174' \
+  --data '{
+    "events": [
+      {
+        "ts": "2026-04-08T12:00:00Z",
+        "uid": "local-test-user",
+        "session_id": "local-test-session",
+        "event_name": "page_view",
+        "path": "/local-test",
+        "title": "Local Test",
+        "referrer": "http://localhost:5174/",
+        "page_url": "http://localhost:5174/local-test"
+      }
+    ]
+  }'
+```
+
+Then refresh the dashboard and confirm the event appears in the metrics.
+
+The `Origin` header is required because the collector rejects events that do not come from an
+allowed site. It also lets the collector associate this local event with the dashboard host.
+
+### Notes
+
+* `make dev` and `scripts/dev.sh` start the FastAPI server, but they do not initialize a local
+  SQLite database for a fresh Mac setup.
+* GeoIP lookups are optional in local testing. If `MAXMIND_DB` is not set, location fields will
+  simply be empty.
+
+---
+
 ## 2. Production Installation (DigitalOcean + Apache)
 
 ### 2.0. Deploy from your Mac
