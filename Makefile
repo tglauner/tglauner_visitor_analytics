@@ -15,6 +15,12 @@ test:
 smoke:
 	curl -fsS http://127.0.0.1:9000/healthz
 
+refresh-widgets:
+	$(PYTHON) scripts/update_site_widgets.py
+
+check-widgets:
+	$(PYTHON) scripts/update_site_widgets.py --check
+
 deploy-prod:
 	./scripts/deploy_from_mac.sh
 

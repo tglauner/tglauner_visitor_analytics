@@ -1,6 +1,8 @@
+import asyncio
 import datetime
 import json
 import secrets
+import sqlite3
 from collections import defaultdict
 from pathlib import Path
 from typing import List, Optional
@@ -27,6 +29,8 @@ from collector.domain import (
 )
 from collector.reporting_filters import ReportingFilterLoader
 from collector.schemas import Batch, Event
+from collector.site_metrics import summarize_widgets, widget_details
+from collector.site_widgets import load_site_widgets
 
 GEO_READER = None
 try:
@@ -60,6 +64,14 @@ def props_page_host_from_json(props_json: Optional[str]) -> str:
     return props_value_host(props_json, 'page_url', 'href')
 
 
+def reporting_connection() -> sqlite3.Connection:
+    connection = sqlite3.connect(database.path, timeout=10)
+    connection.row_factory = sqlite3.Row
+    connection.create_function('props_host', 1, props_host_from_json)
+    connection.create_function('props_page_host', 1, props_page_host_from_json)
+    return connection
+
+
 XVA_DOMAIN = normalize_domain(settings.xva_target_domain)
 if GeoReader and MAXMIND_DB.exists():
     try: GEO_READER = GeoReader(MAXMIND_DB)
@@ -79,6 +91,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+reporting_request_lock = asyncio.Lock()
+
+
+@app.middleware('http')
+async def serialize_reporting_requests(request: Request, call_next):
+    if request.url.path.startswith('/api/'):
+        async with reporting_request_lock:
+            return await call_next(request)
+    return await call_next(request)
 
 basic_auth = HTTPBasic(auto_error=False)
 
@@ -183,6 +205,37 @@ async def collect(req: Request):
 @app.get('/healthz')
 def healthz():
     return {'ok': True}
+
+
+@app.get('/api/sites', dependencies=[Depends(require_admin)])
+def site_widgets_summary(start: Optional[str] = None, end: Optional[str] = None):
+    s, e = parse_range(start, end)
+    widgets = load_site_widgets(settings.site_widgets_path)
+    clause, params = ip_filter_clause()
+    with reporting_connection() as read_connection:
+        widget_rows = summarize_widgets(read_connection, widgets, s, e, clause, params)
+    return {
+        'range': {'start': s, 'end': e},
+        'widgets': widget_rows,
+    }
+
+
+@app.get('/api/sites/{widget_id}', dependencies=[Depends(require_admin)])
+def site_widget_details(widget_id: str, start: Optional[str] = None, end: Optional[str] = None):
+    s, e = parse_range(start, end)
+    widgets = load_site_widgets(settings.site_widgets_path)
+    widget = next((entry for entry in widgets if entry['id'] == widget_id), None)
+    if widget is None:
+        raise HTTPException(status_code=404, detail='Site widget not found')
+    clause, params = ip_filter_clause()
+    with reporting_connection() as read_connection:
+        summary = summarize_widgets(read_connection, [widget], s, e, clause, params)[0]
+        details = widget_details(read_connection, widget, s, e, clause, params)
+    return {
+        'range': {'start': s, 'end': e},
+        'summary': summary,
+        **details,
+    }
 
 @app.get('/api/metrics/summary', dependencies=[Depends(require_admin)])
 def metrics_summary(start: Optional[str] = None, end: Optional[str] = None):

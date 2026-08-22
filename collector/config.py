@@ -22,6 +22,7 @@ class Settings:
     allowed_origins: tuple[str, ...]
     maxmind_db: Path
     reporting_filters_path: Path
+    site_widgets_path: Path
     xva_target_domain: str
     admin_auth_enabled: bool
     admin_username: str
@@ -41,6 +42,7 @@ class Settings:
             allowed_origins=origins,
             maxmind_db=Path(values.get("MAXMIND_DB", "/opt/visitor_log/geo/GeoLite2-City.mmdb")),
             reporting_filters_path=Path(values.get("REPORTING_FILTERS_PATH", package_dir / "config/reporting_filters.json")),
+            site_widgets_path=Path(values.get("SITE_WIDGETS_PATH", package_dir / "config/site_widgets.json")),
             xva_target_domain=values.get("XVA_TARGET_DOMAIN", "course-xva-essentials.tglauner.com"),
             admin_auth_enabled=_bool(values.get("ADMIN_AUTH_ENABLED", "false")),
             admin_username=values.get("ADMIN_USERNAME", "demo"),

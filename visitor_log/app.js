@@ -2,6 +2,7 @@
   const $ = (q) => document.querySelector(q);
   const OPENCLAW_HOST = "openclaw.tglauner.com";
   let adminCredentials = sessionStorage.getItem("visitorAnalyticsAuth") || "";
+  let siteWidgetsById = new Map();
 
   // Use the local API when serving the dashboard on port 5174
   const API_BASE =
@@ -29,6 +30,34 @@
       month: "short",
       day: "numeric",
     });
+  }
+
+  function escapeHTML(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function safeLink(value) {
+    if (!value) return "";
+    try {
+      const url = new URL(value, location.origin);
+      return ["http:", "https:", "mailto:", "tel:", "sms:"].includes(url.protocol)
+        ? url.href
+        : "";
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function formatDuration(milliseconds) {
+    const seconds = Math.round((Number(milliseconds) || 0) / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m ${seconds % 60}s`;
   }
 
   function rangeParams() {
@@ -101,6 +130,116 @@
     return row.target_domain || "external";
   }
 
+  async function loadSiteWidgets() {
+    const grid = $("#siteWidgetGrid");
+    const status = $("#siteWidgetStatus");
+    try {
+      const data = await fetchJSON("/api/sites");
+      const widgets = data.widgets || [];
+      siteWidgetsById = new Map(widgets.map((widget) => [widget.id, widget]));
+      grid.innerHTML = widgets.length
+        ? widgets
+            .map(
+              (widget) => `
+        <button class="site-widget" type="button" data-site-id="${escapeHTML(widget.id)}" aria-label="Open details for ${escapeHTML(widget.label)}">
+          <span class="site-widget-top">
+            <span>
+              <span class="site-widget-title">${escapeHTML(widget.label)}</span>
+              <span class="site-widget-url">${escapeHTML(widget.url)}</span>
+            </span>
+            <span class="visitor-indicator ${widget.visitors ? "" : "is-zero"}" title="${widget.visitors} visitors">${widget.visitors}</span>
+          </span>
+          <span class="site-widget-metrics">
+            <span><strong>${widget.page_views}</strong><br />page views</span>
+            <span><strong>${widget.sessions}</strong><br />sessions</span>
+            <span><strong>${widget.clicks}</strong><br />clicks</span>
+          </span>
+        </button>`
+            )
+            .join("")
+        : '<p class="muted">No site widgets are configured.</p>';
+      status.textContent = `${widgets.length} configured sites`;
+    } catch (error) {
+      grid.innerHTML = '<p class="muted">Site widgets could not be loaded.</p>';
+      status.textContent = "Site data unavailable";
+    }
+  }
+
+  function renderDetailRows(selector, rows, columns, emptyMessage) {
+    const body = document.querySelector(`${selector} tbody`);
+    body.innerHTML = rows.length
+      ? rows
+          .map(
+            (row) =>
+              `<tr>${columns.map((column) => `<td>${escapeHTML(column(row))}</td>`).join("")}</tr>`
+          )
+          .join("")
+      : emptyRow(columns.length, emptyMessage);
+  }
+
+  async function openSiteWidget(widgetId) {
+    const knownWidget = siteWidgetsById.get(widgetId);
+    if (!knownWidget) return;
+    const modal = $("#siteModal");
+    modal.classList.remove("hidden");
+    $("#siteModalTitle").textContent = knownWidget.label;
+    $("#siteModalSource").textContent = `${knownWidget.source} widget`;
+    $("#siteModalUrl").textContent = knownWidget.url;
+    $("#siteModalUrl").href = knownWidget.url;
+    $("#siteDetailStats").innerHTML = '<div class="detail-stat"><span>Status</span><strong>Loading…</strong></div>';
+    try {
+      const data = await fetchJSON(`/api/sites/${encodeURIComponent(widgetId)}`);
+      const summary = data.summary;
+      $("#siteDetailStats").innerHTML = [
+        ["Visitors", summary.visitors],
+        ["Sessions", summary.sessions],
+        ["Page views", summary.page_views],
+        ["Avg. time", formatDuration(summary.avg_time_on_page_ms)],
+        ["Clicks", summary.clicks],
+      ]
+        .map(([label, value]) => `<div class="detail-stat"><span>${label}</span><strong>${value}</strong></div>`)
+        .join("");
+      renderDetailRows("#sitePagesTable", data.pages || [], [
+        (row) => row.path,
+        (row) => row.visitors,
+        (row) => row.page_views,
+        (row) => formatDuration(row.avg_time_on_page_ms),
+        (row) => row.scroll_actions,
+        (row) => row.click_actions,
+      ], "No activity recorded for this site in the selected range.");
+      renderDetailRows("#siteSourcesTable", data.sources || [], [
+        (row) => row.referrer,
+        (row) => row.visitors,
+        (row) => row.sessions,
+      ], "No visitor sources recorded.");
+      renderDetailRows("#siteActionsTable", data.actions || [], [
+        (row) => row.event_name.replaceAll("_", " "),
+        (row) => row.count,
+      ], "No actions recorded.");
+      renderDetailRows("#siteScrollsTable", data.scrolls || [], [
+        (row) => `${row.percent}%`,
+        (row) => row.count,
+      ], "No scroll activity recorded.");
+      renderDetailRows("#siteClicksTable", data.clicks || [], [
+        (row) => row.button_id,
+        (row) => row.href,
+        (row) => row.count,
+      ], "No click activity recorded.");
+    } catch (error) {
+      $("#siteDetailStats").innerHTML = '<div class="detail-stat"><span>Status</span><strong>Unable to load details</strong></div>';
+    }
+  }
+
+  $("#siteWidgetGrid")?.addEventListener("click", (event) => {
+    const widget = event.target.closest("[data-site-id]");
+    if (widget) openSiteWidget(widget.dataset.siteId);
+  });
+
+  $("#siteModalClose")?.addEventListener("click", () => $("#siteModal").classList.add("hidden"));
+  $("#siteModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "siteModal") event.currentTarget.classList.add("hidden");
+  });
+
   async function loadOpenClawSnapshot() {
     const d = await fetchJSON("/api/metrics/site_snapshot", {}, { host: OPENCLAW_HOST });
     renderTiles(document.getElementById("openclawTiles"), [
@@ -118,7 +257,7 @@
           .map(
             (r) => `
       <tr>
-        <td>${r.path || "/"}</td>
+        <td>${escapeHTML(r.path || "/")}</td>
         <td>${r.views || 0}</td>
         <td>${r.visitors || 0}</td>
         <td>${r.outbound_clicks || 0}</td>
@@ -133,8 +272,8 @@
           .map(
             (r) => `
       <tr>
-        <td>${r.button_id || r.href || "(unlabeled)"}</td>
-        <td>${inferCtaType(r)}</td>
+        <td>${escapeHTML(r.button_id || r.href || "(unlabeled)")}</td>
+        <td>${escapeHTML(inferCtaType(r))}</td>
         <td>${r.clicks || 0}</td>
         <td>${r.visitors || 0}</td>
       </tr>`
@@ -168,8 +307,8 @@
     document.querySelector("#pages tbody").innerHTML = rows
       .map(
         (r) => `
-      <tr data-host="${r.host || ""}" data-path="${r.path || "/"}">
-        <td>${r.display_path || r.path || "/"}</td>
+      <tr data-host="${escapeHTML(r.host || "")}" data-path="${escapeHTML(r.path || "/")}">
+        <td>${escapeHTML(r.display_path || r.path || "/")}</td>
         <td>${r.views}</td>
         <td>${r.udemy_clicks}</td>
         <td>${r.orders}</td>
@@ -187,8 +326,8 @@
       .map(
         (r) => `
       <tr>
-        <td>${r.coupon || "(none)"}</td>
-        <td>${r.course_slug || "(unknown)"}</td>
+        <td>${escapeHTML(r.coupon || "(none)")}</td>
+        <td>${escapeHTML(r.course_slug || "(unknown)")}</td>
         <td>${r.clicks}</td>
         <td>${r.orders}</td>
         <td>$${(+r.net).toFixed(2)}</td>
@@ -205,8 +344,8 @@
       .map(
         (r) => `
       <tr>
-        <td>${r.country}</td>
-        <td>${r.region}</td>
+        <td>${escapeHTML(r.country)}</td>
+        <td>${escapeHTML(r.region)}</td>
         <td>${r.visitors}</td>
         <td>${r.sessions}</td>
         <td>${r.views}</td>
@@ -250,7 +389,7 @@
             .map(
               (r) => `
       <tr>
-        <td>${r.path || "/"}</td>
+        <td>${escapeHTML(r.path || "/")}</td>
         <td>${r.clicks}</td>
         <td>${r.visitors}</td>
       </tr>`
@@ -266,8 +405,8 @@
             .map(
               (r) => `
       <tr>
-        <td>${r.country || "?"}</td>
-        <td>${r.region || "?"}</td>
+        <td>${escapeHTML(r.country || "?")}</td>
+        <td>${escapeHTML(r.region || "?")}</td>
         <td>${r.clicks}</td>
       </tr>`
             )
@@ -288,34 +427,36 @@
       ? `https://${host}${path}`
       : path;
     document.querySelector("#detailTable tbody").innerHTML = rows
-      .map(
-        (r) => `
+      .map((r) => {
+        const pageUrl = safeLink(r.page_url);
+        const targetUrl = safeLink(r.href);
+        return `
       <tr>
-        <td>${r.ip || ""}</td>
-        <td>${r.referrer || ""}</td>
-        <td>${formatDate(r.ts)}</td>
-        <td>${r.event_name}</td>
-        <td>${r.app_id || ""}</td>
-        <td>${r.path || ""}</td>
+        <td>${escapeHTML(r.ip || "")}</td>
+        <td>${escapeHTML(r.referrer || "")}</td>
+        <td>${escapeHTML(formatDate(r.ts))}</td>
+        <td>${escapeHTML(r.event_name)}</td>
+        <td>${escapeHTML(r.app_id || "")}</td>
+        <td>${escapeHTML(r.path || "")}</td>
         <td>${
-          r.page_url
-            ? `<a href="${r.page_url}" target="_blank" rel="noopener">${r.page_url}</a>`
+          pageUrl
+            ? `<a href="${escapeHTML(pageUrl)}" target="_blank" rel="noopener">${escapeHTML(r.page_url)}</a>`
             : ""
         }</td>
-        <td>${r.button_id || ""}</td>
-        <td>${r.target_domain || ""}</td>
+        <td>${escapeHTML(r.button_id || "")}</td>
+        <td>${escapeHTML(r.target_domain || "")}</td>
         <td>${
-          r.href
-            ? `<a href="${r.href}" target="_blank" rel="noopener">${r.href}</a>`
+          targetUrl
+            ? `<a href="${escapeHTML(targetUrl)}" target="_blank" rel="noopener">${escapeHTML(r.href)}</a>`
             : ""
         }</td>
-        <td>${r.percent ?? ""}</td>
-        <td>${r.geo_country || ""}</td>
-        <td>${r.device || ""}</td>
-        <td>${r.time_on_page_ms ?? ""}</td>
-        <td>${r.uid}</td>
-      </tr>`
-      )
+        <td>${escapeHTML(r.percent ?? "")}</td>
+        <td>${escapeHTML(r.geo_country || "")}</td>
+        <td>${escapeHTML(r.device || "")}</td>
+        <td>${escapeHTML(r.time_on_page_ms ?? "")}</td>
+        <td>${escapeHTML(r.uid)}</td>
+      </tr>`;
+      })
       .join("");
     document.getElementById("detailModal").classList.remove("hidden");
   }
@@ -338,6 +479,7 @@
 
   async function refreshAll() {
     await Promise.all([
+      loadSiteWidgets(),
       loadOpenClawSnapshot(),
       loadSummary(),
       loadPages(),

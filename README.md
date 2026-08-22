@@ -76,6 +76,31 @@ Run all automated regression tests with:
 make test
 ```
 
+### Site widget directory
+
+The dashboard always renders every site in `collector/config/site_widgets.json`, including sites
+with zero visitors in the selected date range. Entries in `manual` are maintained by hand and are
+never changed by the discovery command. Entries in `discovered` are rebuilt from the public HTTPS
+virtual hosts and application aliases in the droplet's Apache configuration.
+
+Preview whether Apache discovery would change the checked-in file:
+
+```bash
+make check-widgets
+```
+
+Refresh only the `discovered` entries, then review and commit the JSON diff:
+
+```bash
+make refresh-widgets
+git diff -- collector/config/site_widgets.json
+```
+
+To add a permanent widget, add it under `manual`; do not add it under `discovered`. The
+repository skill `.agents/skills/refresh-site-widgets/SKILL.md` documents the guarded workflow.
+The current API remains backward compatible: the existing `/api/metrics/*` routes are unchanged,
+while `/api/sites` and `/api/sites/{widget_id}` serve the widget directory and drill-down data.
+
 ### 4. Serve the dashboard locally
 
 In a second terminal:

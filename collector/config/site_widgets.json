@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "manual": [
+    {
+      "id": "tglauner-home",
+      "label": "TGlauner.com",
+      "url": "https://tglauner.com/",
+      "host": "tglauner.com",
+      "path_prefix": "/"
+    },
+    {
+      "id": "frtb-fundamentals",
+      "label": "FRTB Fundamentals",
+      "url": "https://tglauner.com/frtb_fundamentals/",
+      "host": "tglauner.com",
+      "path_prefix": "/frtb_fundamentals/"
+    },
+    {
+      "id": "interest-rate-derivatives",
+      "label": "Mastering Interest Rate Derivatives",
+      "url": "https://tglauner.com/mastering_interest_rate_derivatives/",
+      "host": "tglauner.com",
+      "path_prefix": "/mastering_interest_rate_derivatives/"
+    },
+    {
+      "id": "mbs-and-abs",
+      "label": "Mastering MBS and ABS",
+      "url": "https://tglauner.com/mastering_mbs_and_abs/",
+      "host": "tglauner.com",
+      "path_prefix": "/mastering_mbs_and_abs/"
+    }
+  ],
+  "discovered": [
+    {
+      "id": "apache-course-xva-essentials-tglauner-com",
+      "label": "Course Xva Essentials",
+      "url": "https://course-xva-essentials.tglauner.com/",
+      "host": "course-xva-essentials.tglauner.com",
+      "path_prefix": "/"
+    },
+    {
+      "id": "apache-ing-validation-tglauner-com",
+      "label": "Ing Validation",
+      "url": "https://ing-validation.tglauner.com/",
+      "host": "ing-validation.tglauner.com",
+      "path_prefix": "/"
+    },
+    {
+      "id": "apache-interhome-stats-tglauner-com",
+      "label": "Interhome Stats",
+      "url": "https://interhome-stats.tglauner.com/",
+      "host": "interhome-stats.tglauner.com",
+      "path_prefix": "/"
+    },
+    {
+      "id": "apache-oil-gasoline-simulator-iran-war-2026-tglauner-com",
+      "label": "Oil Gasoline Simulator Iran War 2026",
+      "url": "https://oil-gasoline-simulator-iran-war-2026.tglauner.com/",
+      "host": "oil-gasoline-simulator-iran-war-2026.tglauner.com",
+      "path_prefix": "/"
+    },
+    {
+      "id": "apache-openclaw-tglauner-com",
+      "label": "Openclaw",
+      "url": "https://openclaw.tglauner.com/",
+      "host": "openclaw.tglauner.com",
+      "path_prefix": "/"
+    },
+    {
+      "id": "apache-quant-tglauner-com",
+      "label": "Quant",
+      "url": "https://quant.tglauner.com/",
+      "host": "quant.tglauner.com",
+      "path_prefix": "/"
+    },
+    {
+      "id": "apache-tglauner-com-ai-value-advisor",
+      "label": "Ai Value Advisor",
+      "url": "https://tglauner.com/ai_value_advisor/",
+      "host": "tglauner.com",
+      "path_prefix": "/ai_value_advisor/"
+    },
+    {
+      "id": "apache-tglauner-com-dashboard",
+      "label": "Dashboard",
+      "url": "https://tglauner.com/dashboard/",
+      "host": "tglauner.com",
+      "path_prefix": "/dashboard/"
+    },
+    {
+      "id": "apache-tglauner-com-multi-model-talkshow",
+      "label": "Multi Model Talkshow",
+      "url": "https://tglauner.com/multi_model_talkshow/",
+      "host": "tglauner.com",
+      "path_prefix": "/multi_model_talkshow/"
+    }
+  ]
+}

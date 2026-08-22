@@ -99,6 +99,8 @@ rsync -az --delete \
   --exclude '.env' \
   --exclude 'confidential/' \
   --exclude 'status/' \
+  --exclude '.playwright-cli/' \
+  --exclude 'output/' \
   --exclude '.DS_Store' \
   --exclude 'data/' \
   --exclude 'geo/' \

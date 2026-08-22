@@ -76,3 +76,7 @@ status/*.snm
 status/*.synctex.gz
 
 status/*.toc
+
+# Local browser-test artifacts
+.playwright-cli/
+output/playwright/
