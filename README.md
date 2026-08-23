@@ -16,7 +16,7 @@ It captures outbound clicks (e.g. Udemy coupons), page views, and user interacti
 ## 1. Architecture
 
 * **`collector/`**: FastAPI backend that receives events (`/collect`), stores them in SQLite, and serves metrics (`/api/metrics/...`).
-* **`visitor_log/`**: Static frontend dashboard (HTML + JS) that visualizes traffic, coupons, locations, and top pages.
+* **`visitor_log/`**: Static frontend dashboard (HTML + JS) that shows portfolio totals, tracked-site drill-downs, and top pages.
 * **Database**: SQLite (no external service required). File lives under `/var/www/html/visitor_analytics/data/analytics.sqlite3` in production.
 * **Web server**: Apache 2.4 on DigitalOcean droplet (already hosting `tglauner.com`). Apache serves:
 
@@ -370,8 +370,8 @@ the shared collector on `tglauner.com`. Add this near the end of the page:
 ></script>
 ```
 
-Label important outbound contact links with stable `data-button-id` values so the dedicated
-OpenClaw dashboard section can break out email and phone CTA performance cleanly.
+Label important outbound contact links with stable `data-button-id` values so the OpenClaw site
+widget's detail view can identify CTA performance cleanly.
 
 ---
 

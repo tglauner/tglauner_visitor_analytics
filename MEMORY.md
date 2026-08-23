@@ -30,3 +30,4 @@ make smoke
 - Request models: `collector/schemas.py`
 - Host, payload, and range validation: `collector/domain.py`
 - Existing endpoint paths and SQLite tables remain backward compatible.
+- The visible dashboard is intentionally limited to portfolio totals, tracked-site widgets, and Top Pages; site and page drill-down modals remain available.

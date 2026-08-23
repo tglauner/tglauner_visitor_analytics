@@ -1,6 +1,5 @@
 (async function () {
   const $ = (q) => document.querySelector(q);
-  const OPENCLAW_HOST = "openclaw.tglauner.com";
   let adminCredentials = sessionStorage.getItem("visitorAnalyticsAuth") || "";
   let siteWidgetsById = new Map();
 
@@ -121,15 +120,6 @@
       .join("");
   }
 
-  function inferCtaType(row) {
-    if (row.target_type) return row.target_type;
-    const href = row.href || "";
-    if (href.startsWith("mailto:")) return "email";
-    if (href.startsWith("tel:")) return "phone";
-    if (href.startsWith("sms:")) return "sms";
-    return row.target_domain || "external";
-  }
-
   async function loadSiteWidgets() {
     const grid = $("#siteWidgetGrid");
     const status = $("#siteWidgetStatus");
@@ -240,48 +230,6 @@
     if (event.target.id === "siteModal") event.currentTarget.classList.add("hidden");
   });
 
-  async function loadOpenClawSnapshot() {
-    const d = await fetchJSON("/api/metrics/site_snapshot", {}, { host: OPENCLAW_HOST });
-    renderTiles(document.getElementById("openclawTiles"), [
-      ["Visitors", d.visitors || 0],
-      ["Sessions", d.sessions || 0],
-      ["Page Views", d.page_views || 0],
-      ["CTA Clicks", d.outbound_clicks || 0],
-      ["Email Clicks", d.email_clicks || 0],
-      ["Phone Clicks", d.phone_clicks || 0],
-    ]);
-
-    const pageRows = d.top_paths || [];
-    document.querySelector("#openclawPages tbody").innerHTML = pageRows.length
-      ? pageRows
-          .map(
-            (r) => `
-      <tr>
-        <td>${escapeHTML(r.path || "/")}</td>
-        <td>${r.views || 0}</td>
-        <td>${r.visitors || 0}</td>
-        <td>${r.outbound_clicks || 0}</td>
-      </tr>`
-          )
-          .join("")
-      : emptyRow(4, "No OpenClaw traffic in this range yet");
-
-    const ctaRows = d.ctas || [];
-    document.querySelector("#openclawCtas tbody").innerHTML = ctaRows.length
-      ? ctaRows
-          .map(
-            (r) => `
-      <tr>
-        <td>${escapeHTML(r.button_id || r.href || "(unlabeled)")}</td>
-        <td>${escapeHTML(inferCtaType(r))}</td>
-        <td>${r.clicks || 0}</td>
-        <td>${r.visitors || 0}</td>
-      </tr>`
-          )
-          .join("")
-      : emptyRow(4, "No OpenClaw CTA clicks in this range yet");
-  }
-
   async function loadSummary() {
     const s = await fetchJSON("/api/metrics/summary");
     const tiles = [
@@ -317,102 +265,6 @@
       </tr>`
       )
       .join("");
-  }
-
-  async function loadCoupons() {
-    const d = await fetchJSON("/api/metrics/coupons");
-    const rows = d.rows || [];
-    document.querySelector("#coupons tbody").innerHTML = rows
-      .map(
-        (r) => `
-      <tr>
-        <td>${escapeHTML(r.coupon || "(none)")}</td>
-        <td>${escapeHTML(r.course_slug || "(unknown)")}</td>
-        <td>${r.clicks}</td>
-        <td>${r.orders}</td>
-        <td>$${(+r.net).toFixed(2)}</td>
-        <td>${(+r.cr_pct).toFixed(2)}%</td>
-      </tr>`
-      )
-      .join("");
-  }
-
-  async function loadLocations() {
-    const d = await fetchJSON("/api/metrics/locations");
-    const rows = d.rows || [];
-    document.querySelector("#locations tbody").innerHTML = rows
-      .map(
-        (r) => `
-      <tr>
-        <td>${escapeHTML(r.country)}</td>
-        <td>${escapeHTML(r.region)}</td>
-        <td>${r.visitors}</td>
-        <td>${r.sessions}</td>
-        <td>${r.views}</td>
-      </tr>`
-      )
-      .join("");
-  }
-
-  async function loadXvaClicks() {
-    const section = document.getElementById("xva");
-    if (!section) return;
-    let d;
-    try {
-      d = await fetchJSON("/api/metrics/xva_clicks");
-    } catch (err) {
-      section.style.display = "none";
-      return;
-    }
-    const domain = d.domain || null;
-    const summary = document.getElementById("xvaSummary");
-    if (!domain) {
-      section.style.display = "none";
-      if (summary) summary.textContent = "";
-      return;
-    }
-    section.style.display = "";
-    const total = d.total_clicks || 0;
-    const visitors = d.unique_visitors || 0;
-    if (summary) {
-      summary.textContent = total
-        ? `${total} clicks to ${domain} from ${visitors} unique visitor${
-            visitors === 1 ? "" : "s"
-          }`
-        : `No clicks to ${domain} in this range yet.`;
-    }
-    const pageRows = d.by_page || [];
-    const pageBody = document.querySelector("#xvaByPage tbody");
-    if (pageBody) {
-      pageBody.innerHTML = pageRows.length
-        ? pageRows
-            .map(
-              (r) => `
-      <tr>
-        <td>${escapeHTML(r.path || "/")}</td>
-        <td>${r.clicks}</td>
-        <td>${r.visitors}</td>
-      </tr>`
-            )
-            .join("")
-        : emptyRow(3, "No tracked clicks yet");
-    }
-    const locRows = d.by_location || [];
-    const locBody = document.querySelector("#xvaByLocation tbody");
-    if (locBody) {
-      locBody.innerHTML = locRows.length
-        ? locRows
-            .map(
-              (r) => `
-      <tr>
-        <td>${escapeHTML(r.country || "?")}</td>
-        <td>${escapeHTML(r.region || "?")}</td>
-        <td>${r.clicks}</td>
-      </tr>`
-            )
-            .join("")
-        : emptyRow(3, "No location data yet");
-    }
   }
 
   async function loadPageDetails(path, host) {
@@ -480,12 +332,8 @@
   async function refreshAll() {
     await Promise.all([
       loadSiteWidgets(),
-      loadOpenClawSnapshot(),
       loadSummary(),
       loadPages(),
-      loadCoupons(),
-      loadLocations(),
-      loadXvaClicks(),
     ]);
   }
 
