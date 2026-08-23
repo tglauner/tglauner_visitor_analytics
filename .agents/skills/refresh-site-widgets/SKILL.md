@@ -26,6 +26,9 @@ Use `scripts/update_site_widgets.py` from the repository root. The script reads 
 
 4. Confirm the `manual` array is byte-for-byte equivalent as parsed JSON, run `make test`, and report added or removed discovered URLs.
 
+Existing discovered URLs retain their current JSON order. Newly discovered URLs are appended, so a
+refresh does not unexpectedly rearrange dashboard widgets.
+
 ## Boundaries
 
 - Never edit, reorder, or delete `manual` entries during discovery.

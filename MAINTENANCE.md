@@ -96,7 +96,6 @@ This checklist ensures that the tracking and dashboard remain accurate and produ
 ## 6. Optional Cleanup
 
 * [ ] Delete old backups (>6 months old).
-* [ ] Archive monthly CSV exports (if enabled later).
 
 ---
 

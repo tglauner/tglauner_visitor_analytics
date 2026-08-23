@@ -94,7 +94,14 @@ def update_config(config_path: Path, discovered: list[dict[str, str]], *, check:
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     manual_before = json.dumps(payload.get("manual", []), sort_keys=True)
     manual_urls = {entry["url"] for entry in payload.get("manual", [])}
-    payload["discovered"] = [entry for entry in discovered if entry["url"] not in manual_urls]
+    discovered_by_url = {
+        entry["url"]: entry for entry in discovered if entry["url"] not in manual_urls
+    }
+    existing_urls = [entry.get("url") for entry in payload.get("discovered", [])]
+    ordered_urls = [url for url in existing_urls if url in discovered_by_url]
+    ordered_url_set = set(ordered_urls)
+    ordered_urls.extend(url for url in discovered_by_url if url not in ordered_url_set)
+    payload["discovered"] = [discovered_by_url[url] for url in ordered_urls]
     if json.dumps(payload.get("manual", []), sort_keys=True) != manual_before:
         raise RuntimeError("Manual widgets changed unexpectedly")
     rendered = json.dumps(payload, indent=2, sort_keys=False) + "\n"

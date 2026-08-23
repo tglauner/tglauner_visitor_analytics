@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, Request, UploadFile, File, HTTPException
+from fastapi import Depends, FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -622,31 +622,3 @@ def metrics_xva_clicks(start: Optional[str] = None, end: Optional[str] = None, d
         'domain': target,
         **metrics,
     }
-
-try:
-    from collector.importer.udemy_csv_importer import parse_udemy_csv
-    _UDEMY_IMPORT_ERROR = None
-except Exception as exc:
-    parse_udemy_csv = None
-    _UDEMY_IMPORT_ERROR = str(exc)
-@app.post('/api/import/udemy_csv', dependencies=[Depends(require_admin)])
-async def import_udemy_csv(file: UploadFile = File(...)):
-    if not parse_udemy_csv:
-        raise HTTPException(
-            status_code=503,
-            detail=f'Udemy CSV importer unavailable: {_UDEMY_IMPORT_ERROR or "unknown error"}',
-        )
-    data = await file.read()
-    rows = parse_udemy_csv(data)
-    inserted = 0
-    with dblock:
-        for (order_id, order_ts, course_slug, coupon, currency, gross, net) in rows:
-            try:
-                cursor = conn.execute(
-                    'INSERT OR IGNORE INTO udemy_orders(order_id, order_ts, course_slug, coupon, currency, gross, net) VALUES (?,?,?,?,?,?,?)',
-                    (order_id, order_ts, course_slug, coupon, currency, gross, net),
-                )
-                inserted += cursor.rowcount
-            except Exception as exc:
-                raise HTTPException(status_code=400, detail='Could not import CSV row') from exc
-    return {'ok': True, 'inserted': inserted}

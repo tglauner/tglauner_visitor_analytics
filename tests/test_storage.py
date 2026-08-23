@@ -1,7 +1,6 @@
 import json
 
 from collector.database import Database
-from collector.importer.udemy_csv_importer import parse_udemy_csv
 from collector.reporting_filters import ReportingFilterLoader
 
 
@@ -32,18 +31,3 @@ def test_reporting_filter_sql_fragment(tmp_path):
     clause, params = ReportingFilterLoader(path).sql_fragment("client_ip")
     assert "client_ip NOT IN (?)" in clause
     assert params == ("1.2.3.4",)
-
-
-def test_udemy_csv_parses_values():
-    rows = parse_udemy_csv(b"Order ID,Purchase Date,Course,Coupon Code,Currency,Gross Amount,Net Amount (Instructor Share)\n1,2026-01-02,My Course,SAVE,USD,$10.00,$5.50\n")
-    assert rows[0] == ("1", "2026-01-02T00:00:00", "my-course", "SAVE", "USD", 10.0, 5.5)
-
-
-def test_udemy_csv_skips_missing_order_id():
-    rows = parse_udemy_csv(b"Order ID,Purchase Date,Course\n,2026-01-02,My Course\n")
-    assert rows == []
-
-
-def test_udemy_csv_skips_invalid_date():
-    rows = parse_udemy_csv(b"Order ID,Purchase Date,Course\n1,not-a-date,My Course\n")
-    assert rows == []

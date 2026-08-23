@@ -344,25 +344,5 @@
   document.getElementById("end").value = isoLocal(end);
   document.getElementById("start").value = isoLocal(start);
 
-  document.getElementById("csv").addEventListener("change", async (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    document.getElementById("importStatus").textContent = "Uploading...";
-    const fd = new FormData();
-    fd.append("file", f);
-    try {
-      const j = await fetchJSON("/api/import/udemy_csv", {
-        method: "POST",
-        body: fd,
-      });
-      document.getElementById("importStatus").textContent = `Imported ${j.inserted} rows`;
-      await refreshAll();
-    } catch (err) {
-      document.getElementById("importStatus").textContent = "Import failed";
-    } finally {
-      document.getElementById("csv").value = "";
-    }
-  });
-
   refreshAll();
 })();

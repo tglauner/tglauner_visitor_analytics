@@ -74,22 +74,6 @@ h1 {
   font-weight: 600;
 }
 
-.controls .file {
-  background: #10151c;
-  padding: 6px 10px;
-  border: 1px dashed #334;
-  border-radius: 6px;
-}
-
-.controls .file input {
-  display: none;
-}
-
-#importStatus {
-  font-size: 12px;
-  color: var(--muted);
-}
-
 .tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

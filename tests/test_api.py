@@ -53,12 +53,8 @@ def test_site_snapshot_rejects_invalid_host(client):
     assert client.get(f"/api/metrics/site_snapshot?host=%%%25&{RANGE}").status_code == 400
 
 
-def test_import_is_idempotent(client):
-    csv_data = b"Order ID,Purchase Date,Course,Net\n1,2026-08-20,Course A,5\n"
-    first = client.post("/api/import/udemy_csv", files={"file": ("orders.csv", csv_data, "text/csv")})
-    second = client.post("/api/import/udemy_csv", files={"file": ("orders.csv", csv_data, "text/csv")})
-    assert first.json()["inserted"] == 1
-    assert second.json()["inserted"] == 0
+def test_udemy_csv_import_route_is_removed(client):
+    assert client.post("/api/import/udemy_csv").status_code == 404
 
 
 def test_admin_auth_blocks_missing_credentials(client, monkeypatch):

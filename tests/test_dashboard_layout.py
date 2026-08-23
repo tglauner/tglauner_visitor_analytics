@@ -17,6 +17,7 @@ def test_dashboard_keeps_only_requested_visible_sections():
         "Coupons & Courses",
         "Locations",
         "XVA Essentials Clicks",
+        "Import Udemy CSV",
     ):
         assert removed_heading not in html
 
@@ -32,5 +33,6 @@ def test_dashboard_refreshes_only_visible_data_sections():
         "loadCoupons",
         "loadLocations",
         "loadXvaClicks",
+        "/api/import/udemy_csv",
     ):
         assert removed_loader not in javascript

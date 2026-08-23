@@ -9,7 +9,6 @@ Provide low-cost, first-party analytics for TGIR sites without an external analy
 ```text
 tracked sites -> POST /collect -> FastAPI -> SQLite
 administrator -> /visitor_log/ -> /api/metrics/* -> SQLite
-Udemy export -> /api/import/udemy_csv -> SQLite
 ```
 
 - Frontend: static HTML, CSS, and JavaScript in `visitor_log/`
@@ -26,13 +25,12 @@ Udemy export -> /api/import/udemy_csv -> SQLite
 - `domain.py`: boundary validation and normalization
 - `schemas.py`: request models
 - `reporting_filters.py`: reloadable reporting exclusions
-- `importer/`: deterministic external-data adapters
 
 ## Security
 
 - Origin validation limits event collection to configured domains.
 - Collection and health checks remain public.
-- Reporting and import routes require HTTP Basic when enabled.
+- Reporting routes require HTTP Basic when enabled.
 - Production must set `ADMIN_AUTH_ENABLED=true` with strong credentials in `.env`.
 - Secrets, databases, GeoIP data, status artifacts, and `confidential/` stay out of git.
 
@@ -40,7 +38,6 @@ Udemy export -> /api/import/udemy_csv -> SQLite
 
 - Startup schema creation is idempotent.
 - Event batches use one locked bulk insert.
-- Udemy imports use unique order IDs and report only newly inserted rows.
 - Reporting filters reload after file changes without restarting the service.
 
 ## Validation

@@ -78,10 +78,35 @@ def test_update_filters_manual_url_duplicates(tmp_path):
     assert all(entry["url"] != "https://tglauner.com/" for entry in json.loads(path.read_text())["discovered"])
 
 
+def test_update_preserves_existing_discovered_order(tmp_path):
+    path = tmp_path / "widgets.json"
+    manual = [{"id": "home", "label": "Home", "url": "https://tglauner.com/", "host": "tglauner.com", "path_prefix": "/"}]
+    discovered = [
+        {"id": "old-talkshow", "label": "Old", "url": "https://tglauner.com/multi_model_talkshow/", "host": "tglauner.com", "path_prefix": "/multi_model_talkshow/"},
+        {"id": "old-course", "label": "Old", "url": "https://course-xva-essentials.tglauner.com/", "host": "course-xva-essentials.tglauner.com", "path_prefix": "/"},
+    ]
+    path.write_text(json.dumps({"version": 1, "manual": manual, "discovered": discovered}))
+
+    update_config(path, parse_apache_inventory(APACHE))
+
+    updated = json.loads(path.read_text())["discovered"]
+    assert [entry["url"] for entry in updated] == [
+        "https://tglauner.com/multi_model_talkshow/",
+        "https://course-xva-essentials.tglauner.com/",
+    ]
+    assert [entry["label"] for entry in updated] == ["Multi Model Talkshow", "Course Xva Essentials"]
+
+
 def test_site_summary_includes_zero_visitor_widgets(client):
     data = client.get(f"/api/sites?{RANGE}").json()
     assert len(data["widgets"]) >= 10
     assert all(widget["visitors"] == 0 for widget in data["widgets"])
+
+
+def test_site_summary_preserves_json_order(client):
+    configured = load_site_widgets(app_module.settings.site_widgets_path)
+    response = client.get(f"/api/sites?{RANGE}").json()["widgets"]
+    assert [widget["id"] for widget in response] == [widget["id"] for widget in configured]
 
 
 def test_site_summary_counts_matching_widget(client, event_payload):

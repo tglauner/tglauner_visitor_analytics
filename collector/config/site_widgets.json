@@ -39,6 +39,34 @@
       "path_prefix": "/"
     },
     {
+      "id": "apache-quant-tglauner-com",
+      "label": "Quant",
+      "url": "https://quant.tglauner.com/",
+      "host": "quant.tglauner.com",
+      "path_prefix": "/"
+    },
+    {
+      "id": "apache-openclaw-tglauner-com",
+      "label": "Openclaw",
+      "url": "https://openclaw.tglauner.com/",
+      "host": "openclaw.tglauner.com",
+      "path_prefix": "/"
+    },
+    {
+      "id": "apache-tglauner-com-dashboard",
+      "label": "Dashboard",
+      "url": "https://tglauner.com/dashboard/",
+      "host": "tglauner.com",
+      "path_prefix": "/dashboard/"
+    },
+    {
+      "id": "apache-tglauner-com-ai-value-advisor",
+      "label": "Ai Value Advisor",
+      "url": "https://tglauner.com/ai_value_advisor/",
+      "host": "tglauner.com",
+      "path_prefix": "/ai_value_advisor/"
+    },
+    {
       "id": "apache-ing-validation-tglauner-com",
       "label": "Ing Validation",
       "url": "https://ing-validation.tglauner.com/",
@@ -58,34 +86,6 @@
       "url": "https://oil-gasoline-simulator-iran-war-2026.tglauner.com/",
       "host": "oil-gasoline-simulator-iran-war-2026.tglauner.com",
       "path_prefix": "/"
-    },
-    {
-      "id": "apache-openclaw-tglauner-com",
-      "label": "Openclaw",
-      "url": "https://openclaw.tglauner.com/",
-      "host": "openclaw.tglauner.com",
-      "path_prefix": "/"
-    },
-    {
-      "id": "apache-quant-tglauner-com",
-      "label": "Quant",
-      "url": "https://quant.tglauner.com/",
-      "host": "quant.tglauner.com",
-      "path_prefix": "/"
-    },
-    {
-      "id": "apache-tglauner-com-ai-value-advisor",
-      "label": "Ai Value Advisor",
-      "url": "https://tglauner.com/ai_value_advisor/",
-      "host": "tglauner.com",
-      "path_prefix": "/ai_value_advisor/"
-    },
-    {
-      "id": "apache-tglauner-com-dashboard",
-      "label": "Dashboard",
-      "url": "https://tglauner.com/dashboard/",
-      "host": "tglauner.com",
-      "path_prefix": "/dashboard/"
     },
     {
       "id": "apache-tglauner-com-multi-model-talkshow",

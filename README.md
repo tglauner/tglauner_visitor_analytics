@@ -81,7 +81,8 @@ make test
 The dashboard always renders every site in `collector/config/site_widgets.json`, including sites
 with zero visitors in the selected date range. Entries in `manual` are maintained by hand and are
 never changed by the discovery command. Entries in `discovered` are rebuilt from the public HTTPS
-virtual hosts and application aliases in the droplet's Apache configuration.
+virtual hosts and application aliases in the droplet's Apache configuration. Existing discovered
+entries retain their JSON order, and newly discovered entries are appended.
 
 Preview whether Apache discovery would change the checked-in file:
 
