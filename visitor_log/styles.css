@@ -230,6 +230,26 @@ section {
   font-size: 13px;
 }
 
+.site-widget.has-auth-state {
+  min-height: 178px;
+}
+
+.site-widget-auth {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 7px;
+  margin-top: 14px;
+  padding-top: 11px;
+  border-top: 1px solid #293848;
+  color: #9eb2c7;
+  font-size: 10px;
+}
+
+.site-widget-auth strong {
+  color: #d9ecff;
+  font-size: 11px;
+}
+
 .section-heading {
   display: flex;
   align-items: flex-start;

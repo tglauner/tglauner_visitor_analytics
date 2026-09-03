@@ -10,6 +10,45 @@ def _query_params(start: str, end: str, ip_params: tuple[Any, ...], widget: dict
     return (start, end, *ip_params, *widget_params)
 
 
+def _auth_summary(
+    connection: sqlite3.Connection,
+    start: str,
+    end: str,
+    ip_clause: str,
+    params: tuple[Any, ...],
+    where: str,
+    total_visitors: int,
+) -> dict[str, Any]:
+    result = connection.execute(
+        f"""
+        WITH visitor_auth AS (
+            SELECT uid,
+                   MAX(CASE WHEN json_extract(props_json, '$.auth_state') = 'authenticated' THEN 1 ELSE 0 END) AS signed_in,
+                   MAX(CASE WHEN json_extract(props_json, '$.auth_state') IN ('anonymous', 'authenticated') THEN 1 ELSE 0 END) AS classified
+            FROM events_raw
+            WHERE event_name='page_view' AND ts BETWEEN ? AND ?{ip_clause} AND {where}
+            GROUP BY uid
+        )
+        SELECT COALESCE(SUM(CASE WHEN signed_in = 1 THEN 1 ELSE 0 END), 0) AS authenticated_visitors,
+               COALESCE(SUM(CASE WHEN classified = 1 AND signed_in = 0 THEN 1 ELSE 0 END), 0) AS anonymous_only_visitors,
+               COALESCE(SUM(classified), 0) AS auth_state_visitors
+        FROM visitor_auth
+        """,
+        params,
+    ).fetchone()
+    authenticated = int(result["authenticated_visitors"] or 0)
+    anonymous_only = int(result["anonymous_only_visitors"] or 0)
+    classified = int(result["auth_state_visitors"] or 0)
+    return {
+        "auth_state_available": classified > 0,
+        "authenticated_visitors": authenticated,
+        "anonymous_only_visitors": anonymous_only,
+        "auth_state_visitors": classified,
+        "unclassified_visitors": max(total_visitors - classified, 0),
+        "login_conversion_pct": round(authenticated / classified * 100, 2) if classified else 0.0,
+    }
+
+
 def summarize_widgets(
     connection: sqlite3.Connection,
     widgets: list[dict[str, Any]],
@@ -33,13 +72,24 @@ def summarize_widgets(
             """,
             _query_params(start, end, ip_params, widget),
         ).fetchone()
+        visitors = int(result["visitors"] or 0)
+        auth_summary = _auth_summary(
+            connection,
+            start,
+            end,
+            ip_clause,
+            _query_params(start, end, ip_params, widget),
+            where,
+            visitors,
+        )
         rows.append({
             **widget,
-            "visitors": int(result["visitors"] or 0),
+            "visitors": visitors,
             "sessions": int(result["sessions"] or 0),
             "page_views": int(result["page_views"] or 0),
             "clicks": int(result["clicks"] or 0),
             "avg_time_on_page_ms": int(result["avg_time_on_page_ms"] or 0),
+            **auth_summary,
         })
     return rows
 

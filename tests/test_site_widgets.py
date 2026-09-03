@@ -117,6 +117,37 @@ def test_site_summary_counts_matching_widget(client, event_payload):
     assert home["page_views"] == 1
 
 
+def test_site_summary_splits_signed_in_from_looked_only_visitors(client, event_payload):
+    quant_event = {
+        **event_payload,
+        "page_url": "https://quant.tglauner.com/",
+        "app_id": "quant",
+    }
+    events = [
+        {**quant_event, "uid": "looked-only", "session_id": "session-looked", "auth_state": "anonymous"},
+        {**quant_event, "uid": "signed-in", "session_id": "session-signed", "auth_state": "anonymous"},
+        {
+            **quant_event,
+            "uid": "signed-in",
+            "session_id": "session-signed",
+            "path": "/dashboard",
+            "page_url": "https://quant.tglauner.com/dashboard",
+            "auth_state": "authenticated",
+        },
+        {**quant_event, "uid": "historical", "session_id": "session-old"},
+    ]
+    client.post("/collect", json={"events": events}, headers={"origin": "https://quant.tglauner.com"})
+
+    widgets = client.get(f"/api/sites?{RANGE}").json()["widgets"]
+    quant = next(widget for widget in widgets if widget["id"] == "apache-quant-tglauner-com")
+    assert quant["visitors"] == 3
+    assert quant["authenticated_visitors"] == 1
+    assert quant["anonymous_only_visitors"] == 1
+    assert quant["unclassified_visitors"] == 1
+    assert quant["login_conversion_pct"] == 50.0
+    assert quant["auth_state_available"] is True
+
+
 def test_site_details_returns_pages_sources_and_actions(client, event_payload):
     events = [event_payload, {
         **event_payload,

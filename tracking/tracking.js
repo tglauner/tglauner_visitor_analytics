@@ -14,6 +14,7 @@
     sessionTimeout: 1800000,
     sampleRate: 1.0,
     appId: null,
+    authState: null,
   };
   function u() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
@@ -99,6 +100,10 @@
     }
   }
 
+  function cleanAuthState(value) {
+    return value === "authenticated" || value === "anonymous" ? value : null;
+  }
+
   let rawXva;
   if (typeof window.__tgXvaDomain__ !== "undefined") {
     rawXva = window.__tgXvaDomain__;
@@ -134,6 +139,15 @@
     rawAppId = window.tgAnalyticsConfig.appId;
   }
   C.appId = cleanAppId(rawAppId);
+
+  let rawAuthState = null;
+  if (
+    window.tgAnalyticsConfig &&
+    Object.prototype.hasOwnProperty.call(window.tgAnalyticsConfig, "authState")
+  ) {
+    rawAuthState = window.tgAnalyticsConfig.authState;
+  }
+  C.authState = cleanAuthState(rawAuthState);
 
   function parseTrackedLink(h) {
     try {
@@ -184,6 +198,9 @@
     }
     if (C.appId) {
       ev.app_id = C.appId;
+    }
+    if (C.authState) {
+      ev.auth_state = C.authState;
     }
     Q.push(ev);
     if (Q.length >= C.batchSize) fl();
@@ -289,6 +306,9 @@
     setSampleRate: (p) => (C.sampleRate = p),
     setAppId: (id) => {
       C.appId = cleanAppId(id);
+    },
+    setAuthState: (state) => {
+      C.authState = cleanAuthState(state);
     },
     setCollector: (collector) => {
       const nextCollector = cleanCollector(collector);

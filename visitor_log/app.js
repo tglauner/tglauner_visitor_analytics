@@ -131,7 +131,7 @@
         ? widgets
             .map(
               (widget) => `
-        <button class="site-widget" type="button" data-site-id="${escapeHTML(widget.id)}" aria-label="Open details for ${escapeHTML(widget.label)}">
+        <button class="site-widget ${widget.auth_state_available ? "has-auth-state" : ""}" type="button" data-site-id="${escapeHTML(widget.id)}" aria-label="Open details for ${escapeHTML(widget.label)}">
           <span class="site-widget-top">
             <span>
               <span class="site-widget-title">${escapeHTML(widget.label)}</span>
@@ -144,6 +144,14 @@
             <span><strong>${widget.sessions}</strong><br />sessions</span>
             <span><strong>${widget.clicks}</strong><br />clicks</span>
           </span>
+          ${widget.auth_state_available ? `
+            <span class="site-widget-auth">
+              <strong>${widget.authenticated_visitors}</strong> signed in
+              <span aria-hidden="true">·</span>
+              <strong>${widget.anonymous_only_visitors}</strong> looked only
+              <span aria-hidden="true">·</span>
+              <strong>${Number(widget.login_conversion_pct).toFixed(1)}%</strong> login
+            </span>` : ""}
         </button>`
             )
             .join("")
@@ -180,12 +188,23 @@
     try {
       const data = await fetchJSON(`/api/sites/${encodeURIComponent(widgetId)}`);
       const summary = data.summary;
+      const authStats = summary.auth_state_available
+        ? [
+            ["Signed-in visitors", summary.authenticated_visitors],
+            ["Looked only", summary.anonymous_only_visitors],
+            ["Login conversion", `${Number(summary.login_conversion_pct).toFixed(1)}%`],
+            ...(summary.unclassified_visitors
+              ? [["Unclassified", summary.unclassified_visitors]]
+              : []),
+          ]
+        : [];
       $("#siteDetailStats").innerHTML = [
         ["Visitors", summary.visitors],
         ["Sessions", summary.sessions],
         ["Page views", summary.page_views],
         ["Avg. time", formatDuration(summary.avg_time_on_page_ms)],
         ["Clicks", summary.clicks],
+        ...authStats,
       ]
         .map(([label, value]) => `<div class="detail-stat"><span>${label}</span><strong>${value}</strong></div>`)
         .join("");
@@ -289,6 +308,7 @@
         <td>${escapeHTML(formatDate(r.ts))}</td>
         <td>${escapeHTML(r.event_name)}</td>
         <td>${escapeHTML(r.app_id || "")}</td>
+        <td>${escapeHTML(r.auth_state || "unclassified")}</td>
         <td>${escapeHTML(r.path || "")}</td>
         <td>${
           pageUrl

@@ -32,3 +32,4 @@ make smoke
 - Existing endpoint paths and SQLite tables remain backward compatible.
 - The visible dashboard is intentionally limited to portfolio totals, tracked-site widgets, and Top Pages; site and page drill-down modals remain available.
 - Udemy CSV upload/import is intentionally unavailable; historical order data remains read-only for retained revenue metrics.
+- Quant analytics records only `anonymous` or `authenticated`, never an account identifier. Site summaries classify a visitor as signed in when any classified page view is authenticated, classify remaining known visitors as looked only, and report older events without state as unclassified.

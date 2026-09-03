@@ -303,6 +303,22 @@ At the **bottom of `<body>`** in each course landing page:
     <script src="/js/tracking.js" defer data-vite-ignore></script>
 ```
 
+Authenticated applications may set a privacy-safe state before loading the tracker:
+
+```html
+<script>
+  window.tgAnalyticsConfig = {
+    appId: "quant",
+    authState: "anonymous" // or "authenticated"
+  };
+</script>
+```
+
+The collector stores only the two-state classification. Do not include usernames, email
+addresses, credentials, or other account identifiers. Site summaries count a visitor as signed
+in if any classified page view is authenticated; otherwise the visitor is counted as looked only.
+Older events without a state remain unclassified.
+
 Make sure `/js/tracking.js` is deployed into `/var/www/html/js/tracking.js` or apache below is added as alias.
 We used alias to /js/tracking.js to keep everything in visitor_analytics contained.
 

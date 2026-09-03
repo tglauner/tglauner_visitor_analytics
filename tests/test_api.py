@@ -26,6 +26,23 @@ def test_collect_stores_event(client, database, event_payload):
     assert database.connection.execute("SELECT COUNT(*) FROM events_raw").fetchone()[0] == 1
 
 
+def test_collect_stores_privacy_safe_auth_state(client, database, event_payload):
+    event_payload["auth_state"] = "authenticated"
+    response = client.post("/collect", json={"events": [event_payload]}, headers={"origin": "https://tglauner.com"})
+
+    assert response.json() == {"ok": True, "n": 1}
+    props = database.connection.execute("SELECT props_json FROM events_raw").fetchone()[0]
+    assert '"auth_state": "authenticated"' in props
+
+
+def test_collect_rejects_unknown_auth_state(client, event_payload):
+    event_payload["auth_state"] = "admin"
+
+    response = client.post("/collect", json={"events": [event_payload]}, headers={"origin": "https://tglauner.com"})
+
+    assert response.status_code == 400
+
+
 def test_collect_constructs_page_url(client, database, event_payload):
     event_payload.pop("page_url")
     client.post("/collect", json={"events": [event_payload]}, headers={"origin": "https://tglauner.com"})

@@ -36,3 +36,16 @@ def test_dashboard_refreshes_only_visible_data_sections():
         "/api/import/udemy_csv",
     ):
         assert removed_loader not in javascript
+
+
+def test_dashboard_displays_privacy_safe_login_state_metrics():
+    html = (ROOT / "visitor_log" / "index.html").read_text(encoding="utf-8")
+    javascript = (ROOT / "visitor_log" / "app.js").read_text(encoding="utf-8")
+    tracker = (ROOT / "tracking" / "tracking.js").read_text(encoding="utf-8")
+
+    assert "Login state" in html
+    assert "Signed-in visitors" in javascript
+    assert "Looked only" in javascript
+    assert "login_conversion_pct" in javascript
+    assert "authState" in tracker
+    assert "ev.auth_state = C.authState" in tracker

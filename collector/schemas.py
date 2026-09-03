@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -25,6 +25,7 @@ class Event(BaseModel):
     time_on_page_ms: Optional[int] = None
     app_id: Optional[str] = None
     page_url: Optional[str] = None
+    auth_state: Optional[Literal["anonymous", "authenticated"]] = None
 
 
 class Batch(BaseModel):

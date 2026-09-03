@@ -192,6 +192,7 @@ async def collect(req: Request):
                 'target_type': e.target_type,
                 'app_id': e.app_id,
                 'page_url': page_url,
+                'auth_state': e.auth_state,
             }),
             e.time_on_page_ms,
         ))
@@ -406,6 +407,7 @@ def metrics_page_details(path: str, host: Optional[str] = None, start: Optional[
         d['target_domain'] = props.get('target_domain')
         d['app_id'] = props.get('app_id')
         d['page_url'] = props.get('page_url')
+        d['auth_state'] = props.get('auth_state')
         d.pop('props_json', None)
         rows.append(d)
     return {'range': {'start': s, 'end': e}, 'path': path, 'rows': rows}
