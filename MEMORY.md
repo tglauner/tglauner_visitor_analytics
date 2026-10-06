@@ -44,3 +44,5 @@ make smoke
 - Canonical coupon and analytics skill instructions now live in sibling `cross_project_tools/skills/`; the helper lives in `landing_page_tglauner.com/scripts/`. Runtime agent registry/status JSON files are host-local, ignored, and preserved during deployment.
 - Local binary Python wheels must match the running Mac architecture. The old environment is preserved as `.venv.pre-coupon-release`; the active `.venv` passes the backend suite. Tests mock dotenv loading and never read the real `.env`.
 - Production releases must preserve `.env`, data, geo files, and agent runtime JSON; the deployment script now excludes all `.venv*` environments and both Git directory/file metadata.
+
+- Production admin authentication uses `/etc/visitor-collector-admin.env`, protected with mode 600 and loaded by systemd `20-admin.conf`. Direct HTTP access to collector/config and private runtime directories is denied by `deploy/apache_private_paths.conf`. Credentials never enter Git or release logs.

@@ -186,7 +186,8 @@ allowed site. It also lets the collector associate this local event with the das
 * `make dev` and `scripts/dev.sh` use the root `.venv`; run `make setup` first.
 * GeoIP lookups are optional in local testing. If `MAXMIND_DB` is not set, location fields will
   simply be empty.
-* Production must set `ADMIN_AUTH_ENABLED=true` and non-default admin credentials in `.env`.
+* Production must enable admin authentication with non-default credentials. The October release uses the protected `/etc/visitor-collector-admin.env` systemd environment file, loaded after the existing unit configuration; it does not alter or read the application `.env`. A private local copy belongs only in `confidential/`.
+* `deploy/apache_private_paths.conf` blocks direct web access to collector code, runtime state, data, GeoIP files, and private/status folders. The shared tracking URL and collection endpoint remain public.
 
 ---
 

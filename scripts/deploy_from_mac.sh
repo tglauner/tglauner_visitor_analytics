@@ -127,7 +127,9 @@ run_ssh "
     \( -path '$REMOTE_APP_ROOT/.git' -o -path '$REMOTE_APP_ROOT/.git/*' \
        -o -path '$REMOTE_APP_ROOT/.venv*' \\
        -o -path '$REMOTE_APP_ROOT/.venv-old' -o -path '$REMOTE_APP_ROOT/.venv-old/*' \\
-       -o -path '$REMOTE_APP_ROOT/.env' \\
+       -o -path '$REMOTE_APP_ROOT/.env*' \\
+       -o -path '$REMOTE_APP_ROOT/collector/config/agent_registry.json' \\
+       -o -path '$REMOTE_APP_ROOT/collector/config/agent_status.json' \\
        -o -path '$REMOTE_APP_ROOT/confidential' -o -path '$REMOTE_APP_ROOT/confidential/*' \\
        -o -path '$REMOTE_APP_ROOT/status' -o -path '$REMOTE_APP_ROOT/status/*' \\
        -o -path '$REMOTE_APP_ROOT/data' -o -path '$REMOTE_APP_ROOT/data/*' \\
@@ -189,6 +191,14 @@ if [[ "$SKIP_PIP" -eq 0 ]]; then
     ./.venv/bin/python -m pip install -r collector/requirements.txt
   "
 fi
+
+echo "Protecting collector files and runtime state from direct web access"
+scp "$ROOT_DIR/deploy/apache_private_paths.conf" "$DROPLET:/tmp/visitor-analytics-private.conf"
+run_ssh "
+  install -m 644 /tmp/visitor-analytics-private.conf /etc/apache2/conf-available/visitor-analytics-private.conf &&
+  a2enconf visitor-analytics-private >/dev/null &&
+  apache2ctl configtest
+"
 
 echo "Restarting services"
 run_ssh "
