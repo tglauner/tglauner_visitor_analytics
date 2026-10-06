@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from collector.config import Settings, sqlite_path
+from collector.agent_status import AgentNotFoundError, AgentStore, AgentStoreError, StaleAgentEventError
 from collector.database import Database
 from collector.domain import (
     allowed_host as domain_allowed_host,
@@ -28,7 +29,7 @@ from collector.domain import (
     props_value_host,
 )
 from collector.reporting_filters import ReportingFilterLoader
-from collector.schemas import Batch, Event
+from collector.schemas import AgentCreate, AgentEvent, AgentUpdate, Batch, Event
 from collector.site_metrics import summarize_widgets, widget_details
 from collector.site_widgets import load_site_widgets
 
@@ -44,6 +45,7 @@ ALLOWED_ORIGINS = settings.allowed_origins
 MAXMIND_DB = settings.maxmind_db
 REPORTING_FILTERS_PATH = settings.reporting_filters_path
 _filters = ReportingFilterLoader(REPORTING_FILTERS_PATH)
+agent_store = AgentStore(settings.agent_registry_path, settings.agent_status_path, settings.agent_projects_root)
 
 
 def excluded_ips() -> List[str]:
@@ -206,6 +208,54 @@ async def collect(req: Request):
 @app.get('/healthz')
 def healthz():
     return {'ok': True}
+
+
+def _agent_error(error: AgentStoreError) -> None:
+    if isinstance(error, AgentNotFoundError):
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    if isinstance(error, StaleAgentEventError):
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get('/api/agents', dependencies=[Depends(require_admin)])
+def list_agents():
+    try:
+        return agent_store.list_agents()
+    except AgentStoreError as error:
+        _agent_error(error)
+
+
+@app.post('/api/agents', status_code=201, dependencies=[Depends(require_admin)])
+def create_agent(payload: AgentCreate):
+    try:
+        return agent_store.create_agent(payload.name, payload.project_path)
+    except AgentStoreError as error:
+        _agent_error(error)
+
+
+@app.put('/api/agents/{agent_id}', dependencies=[Depends(require_admin)])
+def update_agent(agent_id: str, payload: AgentUpdate):
+    try:
+        return agent_store.update_agent(agent_id, payload.name, payload.project_path)
+    except AgentStoreError as error:
+        _agent_error(error)
+
+
+@app.delete('/api/agents/{agent_id}', status_code=204, dependencies=[Depends(require_admin)])
+def delete_agent(agent_id: str):
+    try:
+        agent_store.delete_agent(agent_id)
+    except AgentStoreError as error:
+        _agent_error(error)
+
+
+@app.post('/api/agents/{agent_id}/events', dependencies=[Depends(require_admin)])
+def record_agent_event(agent_id: str, payload: AgentEvent):
+    try:
+        return agent_store.record_event(agent_id, payload.status, payload.job_id, payload.message)
+    except AgentStoreError as error:
+        _agent_error(error)
 
 
 @app.get('/api/sites', dependencies=[Depends(require_admin)])

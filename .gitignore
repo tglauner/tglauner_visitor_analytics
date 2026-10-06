@@ -8,6 +8,7 @@ __pycache__/
 *.venv
 .env/
 .venv/
+.venv*/
 *.egg-info/
 
 # Node
@@ -80,3 +81,7 @@ status/*.toc
 # Local browser-test artifacts
 .playwright-cli/
 output/playwright/
+
+# Local agent registrations and lifecycle events are runtime state.
+/collector/config/agent_registry.json
+/collector/config/agent_status.json

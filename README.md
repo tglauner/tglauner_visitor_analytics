@@ -120,6 +120,38 @@ http://localhost:5174
 The dashboard JS is already wired to use `http://127.0.0.1:9000` when it is served from
 `localhost:5174`.
 
+### Local agent status panel
+
+The first dashboard section is a local agent monitor. Its initial registry contains one potential
+agent for the locally registered projects. Use **Add agent**, **Edit**, and **Delete** in the
+dashboard to maintain the list. Changes persist in the local runtime files
+`collector/config/agent_registry.json` and `collector/config/agent_status.json`.
+These files are ignored by Git and stay on their host; do not publish project registrations or
+last-known lifecycle state to GitHub. A new installation starts with an empty registry.
+
+Agents report lifecycle events to the local collector. For example:
+
+```bash
+curl -fsS -X POST http://127.0.0.1:9000/api/agents/www-tglauner-com/events \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "status": "working",
+    "job_id": "local-test-1",
+    "message": "Working on a local dashboard test"
+  }'
+```
+
+Send the same `job_id` with `status` set to `success` or `failure` when the work ends. A success is
+shown for one hour and then appears as **Needs work**. Failure remains visible until the next event.
+When administrator authentication is enabled, include the configured HTTP Basic credentials.
+
+The repository's `scripts/status_slide.py` now sends these events automatically on a best-effort
+basis. It maps the status slide's `issue` state to dashboard `failure`. The optional environment
+variables `AGENT_DASHBOARD_URL`, `AGENT_DASHBOARD_ID`, `AGENT_DASHBOARD_USERNAME`, and
+`AGENT_DASHBOARD_PASSWORD` override its local defaults. Set `AGENT_DASHBOARD_ENABLED=false` to
+disable notification. The full protocol is in
+`docs/architecture/AGENT_STATUS_SPEC.md`.
+
 ### 5. Send a test event
 
 In a third terminal:

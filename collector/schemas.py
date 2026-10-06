@@ -30,3 +30,18 @@ class Event(BaseModel):
 
 class Batch(BaseModel):
     events: List[Event] = Field(default_factory=list)
+
+
+class AgentCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    project_path: str = Field(min_length=1, max_length=300)
+
+
+class AgentUpdate(AgentCreate):
+    pass
+
+
+class AgentEvent(BaseModel):
+    status: Literal["working", "success", "failure"]
+    job_id: Optional[str] = Field(default=None, max_length=120)
+    message: Optional[str] = Field(default=None, max_length=500)

@@ -8,10 +8,12 @@ from datetime import datetime
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
 import textwrap
+import base64
 import urllib.request
 import urllib.parse
 from pathlib import Path
@@ -42,6 +44,8 @@ STATUS_DIR = PROJECT_ROOT / "status"
 STATUS_TEX = STATUS_DIR / "status_slide.tex"
 STATUS_PDF = STATUS_DIR / "status_slide.pdf"
 STATUS_STATE = STATUS_DIR / "status_slide_state.json"
+AGENT_DASHBOARD_URL = os.environ.get("AGENT_DASHBOARD_URL", "http://127.0.0.1:9000").rstrip("/")
+AGENT_DASHBOARD_ENABLED = os.environ.get("AGENT_DASHBOARD_ENABLED", "true").lower() in ("1", "true", "yes")
 
 
 WORKING_BULLETS = [
@@ -84,6 +88,51 @@ STATUS_STYLES = {
 }
 
 FINAL_STATUSES = ("success", "issue")
+
+
+def dashboard_agent_id() -> str:
+    configured = os.environ.get("AGENT_DASHBOARD_ID", "").strip()
+    if configured:
+        return configured
+    for parent in (PROJECT_ROOT, *PROJECT_ROOT.parents):
+        if parent.name == "Projects":
+            relative = PROJECT_ROOT.relative_to(parent)
+            return slugify(relative.parts[0]) if relative.parts else slugify(PROJECT_ROOT.name)
+    return slugify(PROJECT_ROOT.name)
+
+
+def slugify(value: str) -> str:
+    return "-".join(part for part in re.split(r"[^a-z0-9]+", value.lower()) if part) or "agent"
+
+
+def send_agent_dashboard_event(status: str, bullets: list[str]) -> bool:
+    if not AGENT_DASHBOARD_ENABLED:
+        return False
+    dashboard_status = "failure" if status == "issue" else status
+    payload = {
+        "status": dashboard_status,
+        "job_id": os.environ.get("AGENT_JOB_ID") or None,
+        "message": " · ".join(bullets[:3])[:500] or None,
+    }
+    request = urllib.request.Request(
+        f"{AGENT_DASHBOARD_URL}/api/agents/{urllib.parse.quote(dashboard_agent_id())}/events",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    username = os.environ.get("AGENT_DASHBOARD_USERNAME")
+    password = os.environ.get("AGENT_DASHBOARD_PASSWORD")
+    if username and password:
+        token = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+        request.add_header("Authorization", f"Basic {token}")
+    try:
+        with urllib.request.urlopen(request, timeout=0.75) as response:
+            if response.status < 300:
+                print(f"status slide: agent dashboard updated for {dashboard_agent_id()}")
+                return True
+    except Exception as error:
+        print(f"status slide: agent dashboard skipped - {error}")
+    return False
 
 
 def send_telegram_notification(project: str, status: str, bullets: list[str]) -> bool:
@@ -316,6 +365,7 @@ def write_status_state(project: str, status: str, bullets: list[str], source: st
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
     STATUS_STATE.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    send_agent_dashboard_event(status, bullets)
 
 
 def read_status_state() -> dict[str, object]:

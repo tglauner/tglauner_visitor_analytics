@@ -94,10 +94,11 @@ fi
 
 echo "Syncing application code"
 rsync -rzlt --delete \
+  --exclude '.git' \
   --exclude '.git/' \
-  --exclude '.venv/' \
+  --exclude '.venv*/' \
   --exclude '.venv-old/' \
-  --exclude '.env' \
+  --exclude '.env*' \
   --exclude 'confidential/' \
   --exclude 'status/' \
   --exclude '.playwright-cli/' \
@@ -105,7 +106,9 @@ rsync -rzlt --delete \
   --exclude '.DS_Store' \
   --exclude 'data/' \
   --exclude 'geo/' \
-  --exclude 'collector/.env' \
+  --exclude 'collector/.env*' \
+  --exclude 'collector/config/agent_registry.json' \
+  --exclude 'collector/config/agent_status.json' \
   --exclude 'collector/analytics.sqlite3' \
   --exclude 'collector/analytics.sqlite3-shm' \
   --exclude 'collector/analytics.sqlite3-wal' \
@@ -121,7 +124,8 @@ echo "Normalizing deployed code permissions"
 run_ssh "
   chmod 755 '$REMOTE_APP_ROOT' &&
   find '$REMOTE_APP_ROOT' -mindepth 1 \\
-    \( -path '$REMOTE_APP_ROOT/.venv' -o -path '$REMOTE_APP_ROOT/.venv/*' \\
+    \( -path '$REMOTE_APP_ROOT/.git' -o -path '$REMOTE_APP_ROOT/.git/*' \
+       -o -path '$REMOTE_APP_ROOT/.venv*' \\
        -o -path '$REMOTE_APP_ROOT/.venv-old' -o -path '$REMOTE_APP_ROOT/.venv-old/*' \\
        -o -path '$REMOTE_APP_ROOT/.env' \\
        -o -path '$REMOTE_APP_ROOT/confidential' -o -path '$REMOTE_APP_ROOT/confidential/*' \\
