@@ -172,8 +172,17 @@
     } catch (e) {}
     return null;
   }
+  function bool(value) {
+    return value === true || value === 1 || value === "1" || value === "true";
+  }
+  const config = window.tgAnalyticsConfig || {};
+  const enabled = config.enabled === undefined || bool(config.enabled);
+  const requireConsent = bool(config.requireConsent);
+  let consent = bool(window.tgAnalyticsConsent);
+  function allowed() { return enabled && (!requireConsent || consent); }
   const Q = [];
   function en(ev) {
+    if (!allowed()) return;
     if (Math.random() > C.sampleRate) return;
     ev.ts = new Date().toISOString();
     ev.uid = uid();
@@ -189,6 +198,7 @@
     if (Q.length >= C.batchSize) fl();
   }
   async function fl() {
+    if (!allowed()) { Q.length = 0; return; }
     if (!Q.length) return;
     const b = Q.splice(0, Q.length);
     const payload = JSON.stringify({ events: b });
@@ -221,6 +231,19 @@
       ...utms(location.href),
     });
   }
+  addEventListener("tg:analytics-consent", function (event) {
+    const wasAllowed = allowed();
+    consent = bool(event.detail && event.detail.analytics);
+    if (!allowed()) {
+      Q.length = 0;
+      if (requireConsent) {
+        sc("tg_uid", "", -1);
+        sc("tg_sid", "", -1);
+      }
+    } else if (!wasAllowed) {
+      pg();
+    }
+  });
   pg();
   const _ps = history.pushState;
   history.pushState = function () {

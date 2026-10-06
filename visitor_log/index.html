@@ -22,6 +22,26 @@
       </div>
     </header>
     <main>
+      <section class="agent-operations" aria-labelledby="agentOperationsTitle">
+        <div class="agent-operations-heading">
+          <div>
+            <p class="eyebrow">Local operations</p>
+            <h2 id="agentOperationsTitle">Agent status</h2>
+            <p class="muted">Live project agents. A success returns to Needs work after one hour.</p>
+          </div>
+          <div class="agent-heading-actions">
+            <span id="agentConnectionStatus" class="agent-connection-status is-checking" role="status">Checking</span>
+            <button id="agentAddButton" class="agent-add-button" type="button" aria-label="Add agent">
+              <span aria-hidden="true">+</span> Add agent
+            </button>
+          </div>
+        </div>
+        <div id="agentStatusSummary" class="agent-status-summary" aria-label="Agent status totals"></div>
+        <p id="agentFeedback" class="agent-feedback muted" role="status" aria-live="polite"></p>
+        <div id="agentGrid" class="agent-grid" aria-live="polite">
+          <div class="agent-placeholder">Loading registered agents…</div>
+        </div>
+      </section>
       <section class="summary-section">
         <div class="section-heading">
           <h2>All Tracked Sites</h2>
@@ -57,6 +77,25 @@
         </table>
       </section>
     </main>
+    <div id="agentModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="agentModalTitle">
+      <form id="agentForm" class="modal-content agent-form">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">Agent registry</p>
+            <h2 id="agentModalTitle">Add agent</h2>
+          </div>
+          <button id="agentModalClose" class="secondary-button" type="button">Cancel</button>
+        </div>
+        <input id="agentId" type="hidden" />
+        <label for="agentName">Name</label>
+        <input id="agentName" name="name" type="text" maxlength="100" required autocomplete="off" />
+        <label for="agentProjectPath">Project folder</label>
+        <input id="agentProjectPath" name="project_path" type="text" maxlength="300" required autocomplete="off" placeholder="folder-name or parent/folder-name" />
+        <p class="muted">Use a path relative to the TGIR Projects folder.</p>
+        <p id="agentFormError" class="form-error" role="alert"></p>
+        <button id="agentSaveButton" class="primary-button" type="submit">Save agent</button>
+      </form>
+    </div>
     <div id="siteModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="siteModalTitle">
       <div class="modal-content site-modal-content">
         <div class="modal-heading">
